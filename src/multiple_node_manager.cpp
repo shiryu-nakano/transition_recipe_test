@@ -25,21 +25,42 @@ namespace transition_recipe_test
         MultipleNodeManager()
             : Node("multiple_node_manager")
         {
-            // TODO 関数で初期化できるようにすること
+            // 関数で初期化できるようにすること
             // 初期化時に，ノード名のリストを受け取ってそれぞれのクライアントを作成する
-            a_change_client_ = this->create_client<ChangeState>("/A_node/change_state");
-            a_getstate_client_ = this->create_client<GetState>("/A_node/get_state");
-            b_change_client_ = this->create_client<ChangeState>("/B_node/change_state");
-            b_getstate_client_ = this->create_client<GetState>("/B_node/get_state");
-            c_change_client_ = this->create_client<ChangeState>("/C_node/change_state");
-            c_getstate_client_ = this->create_client<GetState>("/C_node/get_state");
-            change_clients_.push_back(a_change_client_);
-            change_clients_.push_back(b_change_client_);
-            change_clients_.push_back(c_change_client_);
-            getstate_clients_.push_back(a_getstate_client_);
-            getstate_clients_.push_back(b_getstate_client_);
-            getstate_clients_.push_back(c_getstate_client_);
+            // a_change_client_ = this->create_client<ChangeState>("/A_node/change_state");
+            // a_getstate_client_ = this->create_client<GetState>("/A_node/get_state");
+            // b_change_client_ = this->create_client<ChangeState>("/B_node/change_state");
+            // b_getstate_client_ = this->create_client<GetState>("/B_node/get_state");
+            // c_change_client_ = this->create_client<ChangeState>("/C_node/change_state");
+            // c_getstate_client_ = this->create_client<GetState>("/C_node/get_state");
+            // change_clients_.push_back(a_change_client_);
+            // change_clients_.push_back(b_change_client_);
+            // change_clients_.push_back(c_change_client_);
+            // getstate_clients_.push_back(a_getstate_client_);
+            // getstate_clients_.push_back(b_getstate_client_);
+            // getstate_clients_.push_back(c_getstate_client_);
 
+            // 1. YAML から node_ids を読み込む
+            node_names_ = this->declare_parameter<std::vector<std::string>>(
+                "node_ids",
+                std::vector<std::string>{} // デフォルトは空
+            );
+
+            if (node_names_.empty())
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Parameter 'node_ids' is empty. No lifecycle nodes will be managed.");
+            }
+            else
+            {
+                RCLCPP_INFO(this->get_logger(), "According to YAML file, This node is managing %zu nodes:", node_names_.size());
+                for (const auto &name : node_names_)
+                {
+                    RCLCPP_INFO(this->get_logger(), "  - %s", name.c_str());
+                }
+            }
+            // 2. node_names_ からクライアント辞書を構築
+            init_clients_from_node_list();
             // Recipe 構築
             recipe_ = create_sample_recipe();
 
@@ -58,15 +79,19 @@ namespace transition_recipe_test
         TransitionRecipe recipe_;
         bool started_ = false; // 3秒経過後に true にして開始
         std::size_t current_step_index_ = 0;
-        std::vector<std::string> node_names_ = {"A_node", "B_node", "C_node"};
-        rclcpp::Client<ChangeState>::SharedPtr a_change_client_;
-        rclcpp::Client<GetState>::SharedPtr a_getstate_client_;
-        rclcpp::Client<ChangeState>::SharedPtr b_change_client_;
-        rclcpp::Client<GetState>::SharedPtr b_getstate_client_;
-        rclcpp::Client<ChangeState>::SharedPtr c_change_client_;
-        rclcpp::Client<GetState>::SharedPtr c_getstate_client_;
-        std::vector<rclcpp::Client<ChangeState>::SharedPtr> change_clients_; //= {a_change_client_, b_change_client_, c_change_client_};
-        std::vector<rclcpp::Client<GetState>::SharedPtr> getstate_clients_;  //= {a_getstate_client_, b_getstate_client_, c_getstate_client_};
+        // std::vector<std::string> node_names_ = {"A_node", "B_node", "C_node"};
+        std::vector<std::string> node_names_;
+
+        std::map<std::string, rclcpp::Client<ChangeState>::SharedPtr> change_clients_;
+        std::map<std::string, rclcpp::Client<GetState>::SharedPtr> getstate_clients_;
+        // rclcpp::Client<ChangeState>::SharedPtr a_change_client_;
+        // rclcpp::Client<GetState>::SharedPtr a_getstate_client_;
+        // rclcpp::Client<ChangeState>::SharedPtr b_change_client_;
+        // rclcpp::Client<GetState>::SharedPtr b_getstate_client_;
+        // rclcpp::Client<ChangeState>::SharedPtr c_change_client_;
+        // rclcpp::Client<GetState>::SharedPtr c_getstate_client_;
+        // std::vector<rclcpp::Client<ChangeState>::SharedPtr> change_clients_; //= {a_change_client_, b_change_client_, c_change_client_};
+        // std::vector<rclcpp::Client<GetState>::SharedPtr> getstate_clients_;  //= {a_getstate_client_, b_getstate_client_, c_getstate_client_};
 
         // rclcpp::Client<ChangeState>::SharedPtr change_client_;
         // rclcpp::Client<GetState>::SharedPtr getstate_client_;
@@ -109,6 +134,20 @@ namespace transition_recipe_test
             return r;
         }
 
+        void init_clients_from_node_list()
+        {
+            for (const auto &name : node_names_)
+            {
+                // /<node_name>/change_state
+                auto change_client = this->create_client<ChangeState>("/" + name + "/change_state");
+                auto getstate_client = this->create_client<GetState>("/" + name + "/get_state");
+
+                change_clients_[name] = change_client;
+                getstate_clients_[name] = getstate_client;
+                RCLCPP_INFO(this->get_logger(),
+                            "Created ChangeState and GetState clients for node '%s'", name.c_str());   
+            }
+        }
         // ==== タイマーコールバック ====
 
         void timer_callback()
@@ -122,7 +161,7 @@ namespace transition_recipe_test
             double elapsed = (now() - start_time_).seconds();
 
             // サービス準備待ち
-            //if (!change_client_->wait_for_service(100ms))
+            // if (!change_client_->wait_for_service(100ms))
             //{
             //    RCLCPP_WARN_THROTTLE(
             //        get_logger(), *get_clock(), 2000,
@@ -133,7 +172,6 @@ namespace transition_recipe_test
             RCLCPP_INFO(this->get_logger(),
                         "Hello, elapsed %.2f sec", elapsed);
 
-            
             /*
             if (elapsed < 5.0)
             {
@@ -164,7 +202,7 @@ namespace transition_recipe_test
             if (current_step_index_ >= recipe_.steps.size())
             {
                 // 全ステップ終了 → 最後に一回だけ状態取得
-                //request_get_state();
+                // request_get_state();
                 return;
             }
 
@@ -229,15 +267,24 @@ namespace transition_recipe_test
                 */
         }
 
-        // ==== GetState 一回だけ ====
-
+        // ==== GetState  ====
+        // 全ノードに対して GetState を一回だけ呼ぶ
         void request_get_all_state()
         {
-            for (std::size_t i = 0; i < node_names_.size(); ++i)
+            for (const auto &name : node_names_)
             {
-                request_get_state(node_names_[i], getstate_clients_[i]);
+                auto it = getstate_clients_.find(name);
+                if (it == getstate_clients_.end())
+                {
+                    RCLCPP_WARN(this->get_logger(),
+                                "No GetState client found for node '%s'", name.c_str());
+                    continue;
+                }
+                request_get_state(name, it->second);
             }
         }
+
+        // node_id に対して GetState を一回だけ呼ぶ
         void request_get_state(
             const std::string &node_name,
             const rclcpp::Client<GetState>::SharedPtr &client)
@@ -245,7 +292,7 @@ namespace transition_recipe_test
             if (!client->wait_for_service(500ms))
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "GetState service not available");
+                            "GetState service not available for %s", node_name.c_str());
                 return;
             }
 
@@ -257,11 +304,6 @@ namespace transition_recipe_test
                     try
                     {
                         auto resp = future.get();
-                        // RCLCPP_INFO(this->get_logger(),
-                        //             "current lifecycle state: id=%u, label=%s",
-                        //            resp->current_state.id,
-                        //             resp->current_state.label.c_str());
-
                         RCLCPP_INFO(this->get_logger(),
                                     "[%s] current lifecycle state: id=%u, label=%s",
                                     node_name.c_str(),
@@ -271,7 +313,8 @@ namespace transition_recipe_test
                     catch (const std::exception &e)
                     {
                         RCLCPP_ERROR(this->get_logger(),
-                                     "Exception in GetState callback: %s", e.what());
+                                     "Exception in GetState callback for %s: %s",
+                                     node_name.c_str(), e.what());
                     }
                 });
         }
@@ -284,7 +327,7 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    //auto node = std::make_shared<transition_recipe_test::RecipeTestNode>();
+    // auto node = std::make_shared<transition_recipe_test::RecipeTestNode>();
     auto node = std::make_shared<transition_recipe_test::MultipleNodeManager>();
     rclcpp::spin(node);
 

@@ -110,7 +110,8 @@ target_include_directories(multiple_node_manager PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-# install に追加
+# === install に追加 ===
+
 # 実行ファイルのインストール / コンパイル済みライブラリのインストール
 install(TARGETS
   sample_lifecycle_node
@@ -128,9 +129,13 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
-# ヘッダのインストール（common_types.hpp 含む）
+# includeのインストール（common_types.hpp 含む）
 install(DIRECTORY include/
   DESTINATION include
 )
 
+# config ファイルのインストール
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
 ament_package()
