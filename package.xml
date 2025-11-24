@@ -12,6 +12,8 @@
   <depend>rclcpp</depend>
   <depend>rclcpp_lifecycle</depend>
   <depend>lifecycle_msgs</depend>
+  <depend>yaml-cpp</depend>
+
 
   <!-- テスト系が欲しければ追加で:
   <test_depend>ament_lint_auto</test_depend>

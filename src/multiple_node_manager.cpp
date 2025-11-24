@@ -8,6 +8,8 @@
 #include <chrono>
 
 #include "transition_recipe_test/common_types.hpp"
+#include "transition_recipe_test/graph.hpp"
+#include "transition_recipe_test/graph_generator.hpp"
 
 using namespace std::chrono_literals;
 
@@ -25,26 +27,16 @@ namespace transition_recipe_test
         MultipleNodeManager()
             : Node("multiple_node_manager")
         {
-            // 関数で初期化できるようにすること
-            // 初期化時に，ノード名のリストを受け取ってそれぞれのクライアントを作成する
-            // a_change_client_ = this->create_client<ChangeState>("/A_node/change_state");
-            // a_getstate_client_ = this->create_client<GetState>("/A_node/get_state");
-            // b_change_client_ = this->create_client<ChangeState>("/B_node/change_state");
-            // b_getstate_client_ = this->create_client<GetState>("/B_node/get_state");
-            // c_change_client_ = this->create_client<ChangeState>("/C_node/change_state");
-            // c_getstate_client_ = this->create_client<GetState>("/C_node/get_state");
-            // change_clients_.push_back(a_change_client_);
-            // change_clients_.push_back(b_change_client_);
-            // change_clients_.push_back(c_change_client_);
-            // getstate_clients_.push_back(a_getstate_client_);
-            // getstate_clients_.push_back(b_getstate_client_);
-            // getstate_clients_.push_back(c_getstate_client_);
 
             // 1. YAML から node_ids を読み込む
             node_names_ = this->declare_parameter<std::vector<std::string>>(
                 "node_ids",
                 std::vector<std::string>{} // デフォルトは空
             );
+
+            const std::string graph_yaml_path =
+                this->declare_parameter<std::string>("graph_yaml_path", "");
+                
 
             if (node_names_.empty())
             {
@@ -61,6 +53,10 @@ namespace transition_recipe_test
             }
             // 2. node_names_ からクライアント辞書を構築
             init_clients_from_node_list();
+
+            // 3. 状態グラフの構築
+            generate_state_graph(graph_yaml_path);
+
             // Recipe 構築
             recipe_ = create_sample_recipe();
 
@@ -84,20 +80,11 @@ namespace transition_recipe_test
 
         std::map<std::string, rclcpp::Client<ChangeState>::SharedPtr> change_clients_;
         std::map<std::string, rclcpp::Client<GetState>::SharedPtr> getstate_clients_;
-        // rclcpp::Client<ChangeState>::SharedPtr a_change_client_;
-        // rclcpp::Client<GetState>::SharedPtr a_getstate_client_;
-        // rclcpp::Client<ChangeState>::SharedPtr b_change_client_;
-        // rclcpp::Client<GetState>::SharedPtr b_getstate_client_;
-        // rclcpp::Client<ChangeState>::SharedPtr c_change_client_;
-        // rclcpp::Client<GetState>::SharedPtr c_getstate_client_;
-        // std::vector<rclcpp::Client<ChangeState>::SharedPtr> change_clients_; //= {a_change_client_, b_change_client_, c_change_client_};
-        // std::vector<rclcpp::Client<GetState>::SharedPtr> getstate_clients_;  //= {a_getstate_client_, b_getstate_client_, c_getstate_client_};
-
-        // rclcpp::Client<ChangeState>::SharedPtr change_client_;
-        // rclcpp::Client<GetState>::SharedPtr getstate_client_;
 
         SemanticState current_semantic_state_;     // 現在のセマンティック状態
         std::size_t pending_semantic_updates_ = 0; // 非同期GetStateの応答待ち数
+
+        Graph state_graph_; // 状態遷移グラフ
 
         rclcpp::TimerBase::SharedPtr timer_;
         rclcpp::Time start_time_;
@@ -152,8 +139,7 @@ namespace transition_recipe_test
                             "Created ChangeState and GetState clients for node '%s'", name.c_str());
             }
         }
-        
-        
+
         // ==== タイマーコールバック ====
         void timer_callback()
         {
@@ -162,22 +148,29 @@ namespace transition_recipe_test
             //{
             //    return;
             //}
-
             double elapsed = (now() - start_time_).seconds();
 
-            // サービス準備待ち
-            // if (!change_client_->wait_for_service(100ms))
-            //{
-            //    RCLCPP_WARN_THROTTLE(
-            //        get_logger(), *get_clock(), 2000,
-            //        "Waiting for /sample_node/change_state...");
-            //    return;
-            //}
-            //request_get_all_state();
+            // 1. まだ前回の GetState が返りきっていないなら何もしない
+            if (pending_semantic_updates_ != 0)
+            {
+                RCLCPP_WARN_THROTTLE(
+                    get_logger(), *get_clock(), 2000,
+                    "Previous GetState batch still pending (%zu), skip this tick.",
+                    pending_semantic_updates_);
+                return;
+            }
+
+            // 2. この時点で「前回バッチの snapshot」が current_semantic_state_ に入っている
+            //    → ここでグラフマッチングをする
+            maybe_log_semantic_state_graph();
+
+            // 3. 新しいバッチを開始（pending が node数 にリセットされる）
             request_get_all_semantic_state();
-            RCLCPP_INFO(this->get_logger(),
-                        "Hello, elapsed %.2f sec", elapsed);
-            maybe_log_semantic_state();
+
+            RCLCPP_INFO(this->get_logger(), "Hello, elapsed %.2f sec", elapsed);
+
+            // maybe_log_semantic_state_graph();
+
             /*
             if (elapsed < 5.0)
             {
@@ -274,23 +267,8 @@ namespace transition_recipe_test
         }
 
         // ==== GetState  ====
-        // 全ノードに対して GetState を一回だけ呼ぶ
-        void request_get_all_state()
-        {
-            for (const auto &name : node_names_)
-            {
-                auto it = getstate_clients_.find(name);
-                if (it == getstate_clients_.end())
-                {
-                    RCLCPP_WARN(this->get_logger(),
-                                "No GetState client found for node '%s'", name.c_str());
-                    continue;
-                }
-                request_get_state(name, it->second);
-            }
-        }
         // 全ノードに対して GetState を一回だけ呼び， SemanticState を構築する
-        void request_get_all_semantic_state()
+        SemanticState request_get_all_semantic_state()
         {
             // 新しいスナップショットを開始
             current_semantic_state_.node_states.clear();
@@ -313,41 +291,7 @@ namespace transition_recipe_test
                 }
                 request_get_semantic_state(name, it->second);
             }
-        }
-
-        // node_id に対して GetState を一回だけ呼ぶ
-        void request_get_state(
-            const std::string &node_name,
-            const rclcpp::Client<GetState>::SharedPtr &client)
-        {
-            if (!client->wait_for_service(500ms))
-            {
-                RCLCPP_WARN(this->get_logger(),
-                            "GetState service not available for %s", node_name.c_str());
-                return;
-            }
-
-            auto req = std::make_shared<GetState::Request>();
-            client->async_send_request(
-                req,
-                [this, node_name](GetStateFuture future)
-                {
-                    try
-                    {
-                        auto resp = future.get();
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[%s] current lifecycle state: id=%u, label=%s",
-                                    node_name.c_str(),
-                                    resp->current_state.id,
-                                    resp->current_state.label.c_str());
-                    }
-                    catch (const std::exception &e)
-                    {
-                        RCLCPP_ERROR(this->get_logger(),
-                                     "Exception in GetState callback for %s: %s",
-                                     node_name.c_str(), e.what());
-                    }
-                });
+            return current_semantic_state_;
         }
 
         // node_id に対して GetState を一回だけ呼び， SemanticState を構築する
@@ -401,7 +345,7 @@ namespace transition_recipe_test
                     if (pending_semantic_updates_ > 0)
                     {
                         --pending_semantic_updates_;
-                        maybe_log_semantic_state();
+                        // maybe_log_semantic_state();
                     }
                 });
         }
@@ -423,6 +367,29 @@ namespace transition_recipe_test
                 return SemanticState::State::FINALIZED;
             default:
                 return SemanticState::State::UNKNOWN;
+            }
+        }
+
+        //
+        void maybe_log_semantic_state_graph()
+        {
+            if (pending_semantic_updates_ != 0)
+            {
+                return; // まだそろっていない
+            }
+            
+            // ★ Graph に問い合わせて「どの状態IDか」を取得
+            auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
+            if (state_id_opt)
+            {
+                RCLCPP_INFO(this->get_logger(),
+                            "[StateGraph] matched system_state = %s",
+                            state_id_opt->c_str());
+            }
+            else
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "[StateGraph] no match for current SemanticState");
             }
         }
 
@@ -468,6 +435,29 @@ namespace transition_recipe_test
                             "  [%s] semantic_state=%s",
                             name.c_str(), state_str);
             }
+        }
+
+        // ==== 状態グラフ初期化 ====
+        void generate_state_graph(const std::string &yaml_path)
+        {
+            if (!yaml_path.empty())
+            {
+                RCLCPP_INFO(this->get_logger(),
+                            "Loading state graph from YAML: %s",
+                            yaml_path.c_str());
+                state_graph_ = init_state_graph_from_yaml(yaml_path);
+            }
+            else
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Parameter 'graph_yaml_path' is empty. Using hardcoded state graph.");
+                //state_graph_ = init_state_graph();
+                throw std::runtime_error("No graph YAML path provided.");   
+            }
+
+            RCLCPP_INFO(this->get_logger(),
+                        "State graph initialized with %zu states.",
+                        state_graph_.size());
         }
     };
 

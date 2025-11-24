@@ -6,15 +6,38 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# 必要パッケージ
+# 必要パッケージ（実行ノードが使う）
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
-# ========================
+# ========================================
+# ヘッダを公開（include/transition_recipe_test）
+# ========================================
+
+# Graph や SemanticState などを使う全ターゲットで共通
+set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# ========================================
+# graph_lib: ROS 非依存の純粋 C++ ライブラリ
+# ========================================
+add_library(graph_lib
+  src/graph.cpp
+  src/graph_generator.cpp
+)
+target_include_directories(graph_lib PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(graph_lib
+  yaml-cpp
+)
+
+# ========================================
 # sample_lifecycle_node
-# ========================
+# ========================================
 add_executable(sample_lifecycle_node
   src/sample_lifecycle_node.cpp
 )
@@ -23,10 +46,14 @@ ament_target_dependencies(sample_lifecycle_node
   rclcpp_lifecycle
   lifecycle_msgs
 )
+target_include_directories(sample_lifecycle_node PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
 
-# ========================
-# test_recipe_node
-# ========================
+# ========================================
+# test_recipe_node（単一ノード用の古いテストならあってもOK）
+# ========================================
 add_executable(test_recipe_node
   src/test_recipe_node.cpp
 )
@@ -34,21 +61,34 @@ ament_target_dependencies(test_recipe_node
   rclcpp
   lifecycle_msgs
 )
+target_include_directories(test_recipe_node PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
 
-# ========================
+# ========================================
 # multiple_node_manager
-# ========================
+# ========================================
 add_executable(multiple_node_manager
   src/multiple_node_manager.cpp
 )
 ament_target_dependencies(multiple_node_manager
   rclcpp
   lifecycle_msgs
-) 
+)
+target_include_directories(multiple_node_manager PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
 
-# ========================
-# A_node
-# ========================
+# ★ Graph を使うのでここだけ graph_lib をリンク
+target_link_libraries(multiple_node_manager
+  graph_lib
+)
+
+# ========================================
+# A_node / B_node / C_node（各 LifecycleNode）
+# ========================================
 add_executable(a_node
   src/a_node.cpp
 )
@@ -58,13 +98,10 @@ ament_target_dependencies(a_node
   lifecycle_msgs
 )
 target_include_directories(a_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
 
-# ========================
-# B_node
-# ========================
 add_executable(b_node
   src/b_node.cpp
 )
@@ -74,13 +111,10 @@ ament_target_dependencies(b_node
   lifecycle_msgs
 )
 target_include_directories(b_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
 
-# ========================
-# C_node
-# ========================
 add_executable(c_node
   src/c_node.cpp
 )
@@ -90,29 +124,15 @@ ament_target_dependencies(c_node
   lifecycle_msgs
 )
 target_include_directories(c_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
   $<INSTALL_INTERFACE:include>
 )
 
+# ========================================
+# インストール設定
+# ========================================
 
-
-# このパッケージのヘッダを公開
-target_include_directories(sample_lifecycle_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_include_directories(test_recipe_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_include_directories(multiple_node_manager PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-# === install に追加 ===
-
-# 実行ファイルのインストール / コンパイル済みライブラリのインストール
+# 実行ファイルとライブラリをインストール
 install(TARGETS
   sample_lifecycle_node
   test_recipe_node
@@ -120,22 +140,27 @@ install(TARGETS
   a_node
   b_node
   c_node
-  DESTINATION lib/${PROJECT_NAME}
+  graph_lib
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib           # 静的ライブラリ
+  LIBRARY DESTINATION lib           # 共有ライブラリ
+  RUNTIME DESTINATION lib/${PROJECT_NAME}  # 実行ファイル
 )
 
-
-# launch ファイルのインストール
+# launch ファイル
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
-# includeのインストール（common_types.hpp 含む）
+# config（YAML）
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# ヘッダ（common_types.hpp, graph.hpp など）
 install(DIRECTORY include/
   DESTINATION include
 )
 
-# config ファイルのインストール
-install(DIRECTORY config
-  DESTINATION share/${PROJECT_NAME}
-)
+ament_export_targets(export_${PROJECT_NAME})
 ament_package()

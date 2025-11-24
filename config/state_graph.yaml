@@ -1,0 +1,56 @@
+# state_graph.yaml
+
+states:
+  - id: ALL_UNCONFIGURED
+    nodes:
+      A_node: UNCONFIGURED
+      B_node: UNCONFIGURED
+      C_node: UNCONFIGURED
+
+  - id: STATE_ALL_OFF
+    nodes:
+      A_node: INACTIVE
+      B_node: INACTIVE
+      C_node: INACTIVE
+
+  - id: STATE_A_ONLY
+    nodes:
+      A_node: ACTIVE
+      B_node: INACTIVE
+      C_node: INACTIVE
+
+  - id: STATE_B_ONLY
+    nodes:
+      A_node: INACTIVE
+      B_node: ACTIVE
+      C_node: INACTIVE
+
+  - id: STATE_C_ONLY
+    nodes:
+      A_node: INACTIVE
+      B_node: INACTIVE
+      C_node: ACTIVE
+
+  - id: STATE_AB_ON
+    nodes:
+      A_node: ACTIVE
+      B_node: ACTIVE
+      C_node: INACTIVE
+
+  - id: STATE_AC_ON
+    nodes:
+      A_node: ACTIVE
+      B_node: INACTIVE
+      C_node: ACTIVE
+
+  - id: STATE_BC_ON
+    nodes:
+      A_node: INACTIVE
+      B_node: ACTIVE
+      C_node: ACTIVE
+
+  - id: STATE_ALL_ON
+    nodes:
+      A_node: ACTIVE
+      B_node: ACTIVE
+      C_node: ACTIVE
