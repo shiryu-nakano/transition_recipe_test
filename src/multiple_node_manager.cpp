@@ -36,7 +36,6 @@ namespace transition_recipe_test
 
             const std::string graph_yaml_path =
                 this->declare_parameter<std::string>("graph_yaml_path", "");
-                
 
             if (node_names_.empty())
             {
@@ -106,24 +105,22 @@ namespace transition_recipe_test
         TransitionRecipe create_sample_recipe()
         {
             TransitionRecipe r;
-            r.description = "Configure -> Activate sample_node (TransitionRecipe test)";
+            r.description = "Configure all managed nodes (UNCONFIGURED -> INACTIVE)";
 
-            ActionStep s1;
-            s1.target_node_name = "sample_node";
-            s1.operation = "configure";
-            s1.timeout_s = 3.0;
-            s1.retry = 0;
-            r.steps.push_back(s1);
-
-            ActionStep s2;
-            s2.target_node_name = "sample_node";
-            s2.operation = "activate";
-            s2.timeout_s = 3.0;
-            s2.retry = 0;
-            r.steps.push_back(s2);
+            // node_ids に登録されている全ノードを configure 対象にする
+            for (const auto &name : node_names_)
+            {
+                ActionStep step;
+                step.target_node_name = name; // "A_node" / "B_node" / "C_node"
+                step.operation = "configure";
+                step.timeout_s = 3.0;
+                step.retry = 0;
+                r.steps.push_back(step);
+            }
 
             return r;
         }
+
 
         void init_clients_from_node_list()
         {
@@ -169,46 +166,35 @@ namespace transition_recipe_test
 
             RCLCPP_INFO(this->get_logger(), "Hello, elapsed %.2f sec", elapsed);
 
-            // maybe_log_semantic_state_graph();
-
-            /*
-            if (elapsed < 5.0)
+            if (!started_ && elapsed >= 5.0)
             {
-                RCLCPP_INFO_THROTTLE(
-                    get_logger(), *get_clock(), 2000,
-                    "Elapsed %.2f sec, waiting until 5.0 sec...", elapsed);
-                return;
-            }
+                started_ = true;
+                current_step_index_ = 0;
 
-            // ここに来たら一度だけ開始
-            // started_ = true;
-            if (elapsed >= 5.0)
-            {
                 RCLCPP_INFO(this->get_logger(),
-                            "Elapsed %.2f sec, executing TransitionRecipe: %s",
-                            elapsed, recipe_.description.c_str());
-                execute_transition_recipe();
+                            "Starting TransitionRecipe: %s",
+                            recipe_.description.c_str());
+
+                execute_next_step();
             }
-            current_step_index_ = 0;
-            execute_next_step();
-            */
         }
 
         // ==== Recipe 実行 ====
 
         void execute_next_step()
         {
+            // すべてのステップを終えたら終了
             if (current_step_index_ >= recipe_.steps.size())
             {
-                // 全ステップ終了 → 最後に一回だけ状態取得
-                // request_get_state();
+                RCLCPP_INFO(this->get_logger(), "TransitionRecipe finished.");
                 return;
             }
 
             const auto &step = recipe_.steps[current_step_index_];
 
-            auto it = transition_map_.find(step.operation);
-            if (it == transition_map_.end())
+            // operation → Transition ID を取得
+            auto it_trans = transition_map_.find(step.operation);
+            if (it_trans == transition_map_.end())
             {
                 RCLCPP_WARN(this->get_logger(),
                             "Unknown operation '%s'; skipping step.",
@@ -217,8 +203,20 @@ namespace transition_recipe_test
                 execute_next_step();
                 return;
             }
+            uint8_t transition_id = it_trans->second;
 
-            uint8_t transition_id = it->second;
+            // 対象ノードの ChangeState クライアントを取得
+            auto it_client = change_clients_.find(step.target_node_name);
+            if (it_client == change_clients_.end())
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "No ChangeState client for node '%s'; skipping step.",
+                            step.target_node_name.c_str());
+                ++current_step_index_;
+                execute_next_step();
+                return;
+            }
+            auto client = it_client->second;
 
             RCLCPP_INFO(this->get_logger(),
                         "Step %zu / %zu: %s -> %s (timeout=%.1fs)",
@@ -228,12 +226,12 @@ namespace transition_recipe_test
                         step.target_node_name.c_str(),
                         step.timeout_s);
 
+            // リクエスト作成
             auto req = std::make_shared<ChangeState::Request>();
             req->transition.id = transition_id;
 
-            // 非同期でサービス呼び出しし、コールバック内で次のステップを呼ぶ
-            /*
-            change_client_->async_send_request(
+            // 非同期でサービス呼び出しし、コールバック内で次のステップへ
+            client->async_send_request(
                 req,
                 [this, step](ChangeStateFuture future)
                 {
@@ -244,26 +242,28 @@ namespace transition_recipe_test
                         {
                             RCLCPP_WARN(this->get_logger(),
                                         "Transition '%s' for %s failed",
-                                        step.operation.c_str(), step.target_node_name.c_str());
+                                        step.operation.c_str(),
+                                        step.target_node_name.c_str());
                         }
                         else
                         {
                             RCLCPP_INFO(this->get_logger(),
                                         "Transition '%s' for %s succeeded",
-                                        step.operation.c_str(), step.target_node_name.c_str());
+                                        step.operation.c_str(),
+                                        step.target_node_name.c_str());
                         }
                     }
                     catch (const std::exception &e)
                     {
                         RCLCPP_ERROR(this->get_logger(),
-                                     "Exception in ChangeState callback: %s", e.what());
+                                     "Exception in ChangeState callback for %s: %s",
+                                     step.target_node_name.c_str(), e.what());
                     }
 
                     // 次のステップへ
                     ++current_step_index_;
                     execute_next_step();
                 });
-                */
         }
 
         // ==== GetState  ====
@@ -377,7 +377,7 @@ namespace transition_recipe_test
             {
                 return; // まだそろっていない
             }
-            
+
             // ★ Graph に問い合わせて「どの状態IDか」を取得
             auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
             if (state_id_opt)
@@ -451,8 +451,8 @@ namespace transition_recipe_test
             {
                 RCLCPP_WARN(this->get_logger(),
                             "Parameter 'graph_yaml_path' is empty. Using hardcoded state graph.");
-                //state_graph_ = init_state_graph();
-                throw std::runtime_error("No graph YAML path provided.");   
+                // state_graph_ = init_state_graph();
+                throw std::runtime_error("No graph YAML path provided.");
             }
 
             RCLCPP_INFO(this->get_logger(),
