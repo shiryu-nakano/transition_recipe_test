@@ -95,6 +95,10 @@ namespace transition_recipe_test
 
         // rclcpp::Client<ChangeState>::SharedPtr change_client_;
         // rclcpp::Client<GetState>::SharedPtr getstate_client_;
+
+        SemanticState current_semantic_state_;     // 現在のセマンティック状態
+        std::size_t pending_semantic_updates_ = 0; // 非同期GetStateの応答待ち数
+
         rclcpp::TimerBase::SharedPtr timer_;
         rclcpp::Time start_time_;
 
@@ -145,11 +149,12 @@ namespace transition_recipe_test
                 change_clients_[name] = change_client;
                 getstate_clients_[name] = getstate_client;
                 RCLCPP_INFO(this->get_logger(),
-                            "Created ChangeState and GetState clients for node '%s'", name.c_str());   
+                            "Created ChangeState and GetState clients for node '%s'", name.c_str());
             }
         }
+        
+        
         // ==== タイマーコールバック ====
-
         void timer_callback()
         {
             // 既に開始済みなら何もしない（GetState は最後に1回だけ）
@@ -168,10 +173,11 @@ namespace transition_recipe_test
             //        "Waiting for /sample_node/change_state...");
             //    return;
             //}
-            request_get_all_state();
+            //request_get_all_state();
+            request_get_all_semantic_state();
             RCLCPP_INFO(this->get_logger(),
                         "Hello, elapsed %.2f sec", elapsed);
-
+            maybe_log_semantic_state();
             /*
             if (elapsed < 5.0)
             {
@@ -283,6 +289,31 @@ namespace transition_recipe_test
                 request_get_state(name, it->second);
             }
         }
+        // 全ノードに対して GetState を一回だけ呼び， SemanticState を構築する
+        void request_get_all_semantic_state()
+        {
+            // 新しいスナップショットを開始
+            current_semantic_state_.node_states.clear();
+            pending_semantic_updates_ = node_names_.size();
+
+            for (const auto &name : node_names_)
+            {
+                auto it = getstate_clients_.find(name);
+                if (it == getstate_clients_.end())
+                {
+                    RCLCPP_WARN(this->get_logger(),
+                                "No GetState client found for node '%s'", name.c_str());
+                    // このノード分は応答なしとして扱う
+                    current_semantic_state_.node_states[name] = SemanticState::State::UNKNOWN;
+                    if (pending_semantic_updates_ > 0)
+                    {
+                        --pending_semantic_updates_;
+                    }
+                    continue;
+                }
+                request_get_semantic_state(name, it->second);
+            }
+        }
 
         // node_id に対して GetState を一回だけ呼ぶ
         void request_get_state(
@@ -317,6 +348,126 @@ namespace transition_recipe_test
                                      node_name.c_str(), e.what());
                     }
                 });
+        }
+
+        // node_id に対して GetState を一回だけ呼び， SemanticState を構築する
+        void request_get_semantic_state(
+            const std::string &node_name,
+            const rclcpp::Client<GetState>::SharedPtr &client)
+        {
+            if (!client->wait_for_service(500ms))
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "GetState service not available for %s", node_name.c_str());
+                // このノードは UNKNOWN として扱う
+                current_semantic_state_.node_states[node_name] = SemanticState::State::UNKNOWN;
+                if (pending_semantic_updates_ > 0)
+                {
+                    --pending_semantic_updates_;
+                    maybe_log_semantic_state();
+                }
+                return;
+            }
+
+            auto req = std::make_shared<GetState::Request>();
+            client->async_send_request(
+                req,
+                [this, node_name](GetStateFuture future)
+                {
+                    try
+                    {
+                        auto resp = future.get();
+
+                        // ① 各ノードの状態を従来通り LOG 出力
+                        RCLCPP_INFO(this->get_logger(),
+                                    "[%s] current lifecycle state: id=%u, label=%s",
+                                    node_name.c_str(),
+                                    resp->current_state.id,
+                                    resp->current_state.label.c_str());
+
+                        // ② SemanticState に反映
+                        current_semantic_state_.node_states[node_name] =
+                            map_lifecycle_to_semantic(resp->current_state.id);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        RCLCPP_ERROR(this->get_logger(),
+                                     "Exception in GetState callback for %s: %s",
+                                     node_name.c_str(), e.what());
+                        current_semantic_state_.node_states[node_name] = SemanticState::State::UNKNOWN;
+                    }
+
+                    // ③ 応答カウンタを減らして、全部そろったらまとめログ
+                    if (pending_semantic_updates_ > 0)
+                    {
+                        --pending_semantic_updates_;
+                        maybe_log_semantic_state();
+                    }
+                });
+        }
+
+        // lifecycle_msgs::msg::State ID を SemanticState::State に変換
+        SemanticState::State map_lifecycle_to_semantic(uint8_t lifecycle_id) const
+        {
+            using lifecycle_msgs::msg::State;
+
+            switch (lifecycle_id)
+            {
+            case State::PRIMARY_STATE_UNCONFIGURED:
+                return SemanticState::State::UNCONFIGURED;
+            case State::PRIMARY_STATE_INACTIVE:
+                return SemanticState::State::INACTIVE;
+            case State::PRIMARY_STATE_ACTIVE:
+                return SemanticState::State::ACTIVE;
+            case State::PRIMARY_STATE_FINALIZED:
+                return SemanticState::State::FINALIZED;
+            default:
+                return SemanticState::State::UNKNOWN;
+            }
+        }
+
+        // 全てのノードの SemanticState がそろったらログ出力
+        void maybe_log_semantic_state()
+        {
+            if (pending_semantic_updates_ != 0)
+            {
+                return; // まだそろっていない
+            }
+
+            // ここに来た時点で current_semantic_state_ に
+            // node_name -> SemanticState::State が一通り入っている
+
+            RCLCPP_INFO(this->get_logger(), "[SemanticState] snapshot:");
+
+            for (const auto &kv : current_semantic_state_.node_states)
+            {
+                const auto &name = kv.first;
+                auto semantic_state = kv.second;
+
+                const char *state_str = nullptr;
+                switch (semantic_state)
+                {
+                case SemanticState::State::UNCONFIGURED:
+                    state_str = "UNCONFIGURED";
+                    break;
+                case SemanticState::State::INACTIVE:
+                    state_str = "INACTIVE";
+                    break;
+                case SemanticState::State::ACTIVE:
+                    state_str = "ACTIVE";
+                    break;
+                case SemanticState::State::FINALIZED:
+                    state_str = "FINALIZED";
+                    break;
+                default:
+                    state_str = "UNKNOWN";
+                    break;
+                }
+
+                RCLCPP_INFO(this->get_logger(),
+                            "  [%s] semantic_state=%s",
+                            name.c_str(), state_str);
+            }
         }
     };
 

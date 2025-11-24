@@ -30,11 +30,11 @@ struct SemanticState
         FINALIZED = 4
     };
 
-    std::unordered_map<std::string, State> semantic_state;
+    std::unordered_map<std::string, State> node_states;
 
     bool operator==(const SemanticState &other) const noexcept
     {
-        return semantic_state == other.semantic_state;
+        return node_states == other.node_states;
     }
 };
 
