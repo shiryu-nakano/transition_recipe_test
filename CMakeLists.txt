@@ -21,7 +21,7 @@ find_package(yaml-cpp REQUIRED)
 set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # ========================================
-# graph_lib: ROS 非依存の純粋 C++ ライブラリ
+# graph_lib: ROS 非依存の純粋
 # ========================================
 add_library(graph_lib
   src/graph.cpp
@@ -33,6 +33,17 @@ target_include_directories(graph_lib PUBLIC
 )
 target_link_libraries(graph_lib
   yaml-cpp
+)
+# ============================================
+# recipe_library（ROS 非依存）
+# ============================================
+add_library(recipe_lib
+  src/recipe_generator.cpp
+)
+
+target_include_directories(recipe_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
 # ========================================
@@ -84,6 +95,7 @@ target_include_directories(multiple_node_manager PUBLIC
 # ★ Graph を使うのでここだけ graph_lib をリンク
 target_link_libraries(multiple_node_manager
   graph_lib
+  recipe_lib
 )
 
 # ========================================
@@ -141,6 +153,7 @@ install(TARGETS
   b_node
   c_node
   graph_lib
+  recipe_lib
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib           # 静的ライブラリ
   LIBRARY DESTINATION lib           # 共有ライブラリ

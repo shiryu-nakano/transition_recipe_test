@@ -10,6 +10,7 @@
 #include "transition_recipe_test/common_types.hpp"
 #include "transition_recipe_test/graph.hpp"
 #include "transition_recipe_test/graph_generator.hpp"
+#include "transition_recipe_test/recipe_generator.hpp"
 
 using namespace std::chrono_literals;
 
@@ -88,6 +89,10 @@ namespace transition_recipe_test
         rclcpp::TimerBase::SharedPtr timer_;
         rclcpp::Time start_time_;
 
+        bool recipe_running_ = false;
+        rclcpp::Time last_transition_time_;
+        std::string last_state_id_;
+
         std::map<std::string, uint8_t> transition_map_;
 
         // ==== 初期化系 ====
@@ -121,7 +126,6 @@ namespace transition_recipe_test
             return r;
         }
 
-
         void init_clients_from_node_list()
         {
             for (const auto &name : node_names_)
@@ -138,7 +142,7 @@ namespace transition_recipe_test
         }
 
         // ==== タイマーコールバック ====
-        void timer_callback()
+        void timer_callback_()
         {
             // 既に開始済みなら何もしない（GetState は最後に1回だけ）
             // if (started_)
@@ -179,91 +183,226 @@ namespace transition_recipe_test
             }
         }
 
+        void timer_callback()
+        {
+            double elapsed = (now() - start_time_).seconds();
+
+
+            maybe_log_semantic_state_graph();
+            // ============================
+            // ① まだ前回の GetState が返りきっていない場合はスキップ
+            // ============================
+            if (pending_semantic_updates_ != 0)
+                return;
+            // ============================
+            // ② 前回の snapshot に対して Graph マッチング
+            // ============================
+            auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
+            if (!state_id_opt)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "[StateGraph] no match for current SemanticState");
+            }
+            else
+            {
+                const std::string &current = *state_id_opt;
+
+                // 初回（まだ記録無し）
+                if (last_state_id_.empty())
+                {
+                    last_state_id_ = current;
+                    last_transition_time_ = now();
+                }
+
+                // ============================
+                // ③ 10秒経過したら次の状態へ遷移
+                // ============================
+                double since_last = (now() - last_transition_time_).seconds();
+
+                if (since_last >= 10.0 && !recipe_running_) // ← レシピ実行中はスキップ
+                {
+                    // 次の状態を決める（例として A→B→C→ALL_OFF→A… のサイクル）
+                    std::string target = determine_next_state(current);
+
+                    RCLCPP_INFO(this->get_logger(),
+                                "[AutoTransition] %s → %s",
+                                current.c_str(), target.c_str());
+
+                    // レシピ生成
+                    auto recipe = build_transition_recipe(current, target);
+
+                    // レシピ実行
+                    execute_transition_recipe(recipe);
+
+                    // 更新
+                    last_state_id_ = target;
+                    last_transition_time_ = now();
+                }
+            }
+
+            // ============================
+            // ④ 新しい GetState バッチを投げる
+            // ============================
+            request_get_all_semantic_state();
+
+            RCLCPP_INFO(this->get_logger(),
+                        "Hello, elapsed %.2f sec", elapsed);
+        }
+
         // ==== Recipe 実行 ====
+        void execute_transition_recipe(const TransitionRecipe &recipe)
+        {
+            if (recipe_running_)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Cannot start recipe '%s' because another recipe is running.",
+                            recipe.description.c_str());
+                return;
+            }
+
+            if (recipe.steps.empty())
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Recipe is empty: '%s'", recipe.description.c_str());
+                return;
+            }
+
+            // レシピ開始！
+            recipe_running_ = true;
+            recipe_ = recipe;
+            current_step_index_ = 0;
+
+            RCLCPP_INFO(this->get_logger(),
+                        "=== Executing TransitionRecipe: %s ===",
+                        recipe_.description.c_str());
+
+            execute_next_step();
+        }
 
         void execute_next_step()
         {
-            // すべてのステップを終えたら終了
+            // ===========================
+            // 1. 全ステップ終了
+            // ===========================
             if (current_step_index_ >= recipe_.steps.size())
             {
-                RCLCPP_INFO(this->get_logger(), "TransitionRecipe finished.");
+                RCLCPP_INFO(this->get_logger(),
+                            "=== TransitionRecipe finished: %s ===",
+                            recipe_.description.c_str());
+
+                recipe_running_ = false; // ★ 完了したのでロック解除
                 return;
             }
 
             const auto &step = recipe_.steps[current_step_index_];
 
-            // operation → Transition ID を取得
+            // ===========================
+            // 2. Operation → Transition ID
+            // ===========================
             auto it_trans = transition_map_.find(step.operation);
             if (it_trans == transition_map_.end())
             {
-                RCLCPP_WARN(this->get_logger(),
-                            "Unknown operation '%s'; skipping step.",
-                            step.operation.c_str());
+                RCLCPP_ERROR(this->get_logger(),
+                             "Unknown operation '%s' at step %zu. Skipping.",
+                             step.operation.c_str(),
+                             current_step_index_);
                 ++current_step_index_;
                 execute_next_step();
                 return;
             }
             uint8_t transition_id = it_trans->second;
 
-            // 対象ノードの ChangeState クライアントを取得
+            // ===========================
+            // 3. Node name → ChangeState client
+            // ===========================
             auto it_client = change_clients_.find(step.target_node_name);
             if (it_client == change_clients_.end())
             {
-                RCLCPP_WARN(this->get_logger(),
-                            "No ChangeState client for node '%s'; skipping step.",
-                            step.target_node_name.c_str());
+                RCLCPP_ERROR(this->get_logger(),
+                             "No ChangeState client for node '%s' at step %zu.",
+                             step.target_node_name.c_str(),
+                             current_step_index_);
                 ++current_step_index_;
                 execute_next_step();
                 return;
             }
+
             auto client = it_client->second;
 
+            // ===========================
+            // 4. ログ
+            // ===========================
             RCLCPP_INFO(this->get_logger(),
-                        "Step %zu / %zu: %s -> %s (timeout=%.1fs)",
+                        "[Recipe %zu/%zu] %s → %s (timeout=%.1fs)",
                         current_step_index_ + 1,
                         recipe_.steps.size(),
                         step.operation.c_str(),
                         step.target_node_name.c_str(),
                         step.timeout_s);
 
-            // リクエスト作成
+            // ===========================
+            // 5. リクエスト作成
+            // ===========================
             auto req = std::make_shared<ChangeState::Request>();
             req->transition.id = transition_id;
 
-            // 非同期でサービス呼び出しし、コールバック内で次のステップへ
+            // ===========================
+            // 6. 非同期コールバックで次ステップへ進む
+            // ===========================
             client->async_send_request(
                 req,
                 [this, step](ChangeStateFuture future)
                 {
+                    bool ok = false;
                     try
                     {
                         auto resp = future.get();
-                        if (!resp->success)
-                        {
-                            RCLCPP_WARN(this->get_logger(),
-                                        "Transition '%s' for %s failed",
-                                        step.operation.c_str(),
-                                        step.target_node_name.c_str());
-                        }
-                        else
-                        {
-                            RCLCPP_INFO(this->get_logger(),
-                                        "Transition '%s' for %s succeeded",
-                                        step.operation.c_str(),
-                                        step.target_node_name.c_str());
-                        }
+                        ok = resp->success;
                     }
-                    catch (const std::exception &e)
+                    catch (...)
                     {
-                        RCLCPP_ERROR(this->get_logger(),
-                                     "Exception in ChangeState callback for %s: %s",
-                                     step.target_node_name.c_str(), e.what());
+                        ok = false;
                     }
 
-                    // 次のステップへ
+                    if (!ok)
+                    {
+                        RCLCPP_WARN(this->get_logger(),
+                                    "Step failed: %s → %s",
+                                    step.operation.c_str(),
+                                    step.target_node_name.c_str());
+                    }
+                    else
+                    {
+                        RCLCPP_INFO(this->get_logger(),
+                                    "Step succeeded: %s → %s",
+                                    step.operation.c_str(),
+                                    step.target_node_name.c_str());
+                    }
+
+                    // ===========================
+                    // ★ 7. 次のステップへ進む
+                    // ===========================
                     ++current_step_index_;
                     execute_next_step();
                 });
+        }
+
+        // TODO 後で変更
+        std::string determine_next_state(const std::string &current)
+        {
+            if(current =="ALL_UNCONFIGURED")
+                return "STATE_ALL_OFF"; 
+            if (current == "STATE_ALL_OFF")
+                return "STATE_A_ONLY";
+            if (current == "STATE_A_ONLY")
+                return "STATE_B_ONLY";
+            if (current == "STATE_B_ONLY")
+                return "STATE_C_ONLY";
+            if (current == "STATE_C_ONLY")
+                return "STATE_ALL_OFF";
+
+            // fallback
+            return "STATE_ALL_OFF";
         }
 
         // ==== GetState  ====
