@@ -61,6 +61,8 @@ namespace transition_recipe_test
         {
             vx_ = msg->linear.x;
             vtheta_ = msg->angular.z;
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                 "Received cmd_vel: linear.x=%.2f, angular.z=%.2f", vx_, vtheta_);
         }
 
         void timer_callback()
@@ -79,6 +81,10 @@ namespace transition_recipe_test
                 theta_ -= 2.0 * M_PI;
             while (theta_ < -M_PI)
                 theta_ += 2.0 * M_PI;
+
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                 "Robot position: x=%.2f, y=%.2f, theta=%.2f, vx=%.2f, vtheta=%.2f",
+                                 x_, y_, theta_, vx_, vtheta_);
 
             // Quaternion作成
             tf2::Quaternion q;
