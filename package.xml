@@ -13,6 +13,9 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>lifecycle_msgs</depend>
   <depend>yaml-cpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+
 
 
   <!-- テスト系が欲しければ追加で:

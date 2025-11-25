@@ -12,6 +12,14 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
+
 
 # ========================================
 # ヘッダを公開（include/transition_recipe_test）
@@ -45,6 +53,31 @@ target_include_directories(recipe_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+
+#　Node群
+
+# ========================================
+# simulator_node
+# ========================================
+add_executable(simulator_node
+  src/simulator_node.cpp
+)
+ament_target_dependencies(simulator_node
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  visualization_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+target_include_directories(simulator_node PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
+  $<INSTALL_INTERFACE:include>
+)
+
+
+
 
 # ========================================
 # sample_lifecycle_node
@@ -108,6 +141,7 @@ ament_target_dependencies(a_node
   rclcpp
   rclcpp_lifecycle
   lifecycle_msgs
+  geometry_msgs
 )
 target_include_directories(a_node PUBLIC
   $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
@@ -121,6 +155,7 @@ ament_target_dependencies(b_node
   rclcpp
   rclcpp_lifecycle
   lifecycle_msgs
+  geometry_msgs
 )
 target_include_directories(b_node PUBLIC
   $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
@@ -134,6 +169,7 @@ ament_target_dependencies(c_node
   rclcpp
   rclcpp_lifecycle
   lifecycle_msgs
+  geometry_msgs
 )
 target_include_directories(c_node PUBLIC
   $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
@@ -154,6 +190,7 @@ install(TARGETS
   c_node
   graph_lib
   recipe_lib
+  simulator_node     
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib           # 静的ライブラリ
   LIBRARY DESTINATION lib           # 共有ライブラリ

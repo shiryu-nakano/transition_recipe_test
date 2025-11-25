@@ -20,10 +20,31 @@ def generate_launch_description():
         default_value=default_graph_yaml,
         description='Path to semantic state graph YAML'
     )
+    # simulator のパラメータファイル
+    config_file = os.path.join(
+        get_package_share_directory("transition_recipe_test"),
+        'config',
+        'sim_params.yaml'
+    )
+    
+    # RViz設定ファイルのパス
+    rviz_config_file = os.path.join(
+        get_package_share_directory("transition_recipe_test"),
+        'rviz',
+        'demo.rviz'
+    )
 
     return LaunchDescription([
         graph_yaml_arg,
 
+        Node(
+            package="transition_recipe_test",
+            executable='simulator_node',
+            name='robot_simulator_node',
+            parameters=[config_file],
+            output='screen'
+        ),
+        
         Node(
             package='transition_recipe_test',
             executable='a_node',
@@ -52,6 +73,15 @@ def generate_launch_description():
                     'graph_yaml_path': LaunchConfiguration('graph_yaml_path')
                 }
             ],
+            output='screen'
+        ),
+        
+        # RViz
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            arguments=['-d', rviz_config_file],
             output='screen'
         ),
     ])

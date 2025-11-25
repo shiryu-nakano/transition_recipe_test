@@ -1,6 +1,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <chrono>
+using namespace std::chrono_literals;
 
 namespace transition_recipe_test
 {
@@ -19,19 +22,39 @@ namespace transition_recipe_test
         CallbackReturn on_configure(const rclcpp_lifecycle::State &) override
         {
             RCLCPP_INFO(this->get_logger(), "[A_node] CONFIGURED");
+            cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
             return CallbackReturn::SUCCESS;
         }
 
         CallbackReturn on_activate(const rclcpp_lifecycle::State &) override
         {
             RCLCPP_INFO(this->get_logger(), "[A_node] ACTIVE!");
+            cmd_vel_pub_->on_activate();
+            timer_ = this->create_wall_timer(
+                100ms, std::bind(&ANode::timer_callback, this));
+
             return CallbackReturn::SUCCESS;
         }
 
         CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override
         {
             RCLCPP_INFO(this->get_logger(), "[A_node] DEACTIVATED");
+            timer_->cancel();
+            cmd_vel_pub_->on_deactivate();
             return CallbackReturn::SUCCESS;
+        }
+
+    private:
+        //rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+        rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+        rclcpp::TimerBase::SharedPtr timer_;
+
+        void timer_callback()
+        {
+            geometry_msgs::msg::Twist msg;
+            msg.linear.x = 0.5;  // 0.5 m/s で直進
+            msg.angular.z = 0.0; // 回転速度 0 (まっすぐ)
+            cmd_vel_pub_->publish(msg);
         }
     };
 

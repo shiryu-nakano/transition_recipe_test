@@ -1,0 +1,6 @@
+simulator_node:
+  ros__parameters:
+    initial_x: 0.0
+    initial_y: 0.0
+    initial_theta: 0.0
+    update_rate: 50.0
