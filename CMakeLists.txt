@@ -207,6 +207,11 @@ install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
+# rviz（RViz設定ファイル）
+install(DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # ヘッダ（common_types.hpp, graph.hpp など）
 install(DIRECTORY include/
   DESTINATION include
