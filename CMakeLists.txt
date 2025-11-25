@@ -60,7 +60,7 @@ target_include_directories(recipe_lib PUBLIC
 # simulator_node
 # ========================================
 add_executable(simulator_node
-  src/simulator_node.cpp
+  src/sample/simulator_node.cpp
 )
 ament_target_dependencies(simulator_node
   rclcpp
@@ -78,37 +78,6 @@ target_include_directories(simulator_node PUBLIC
 
 
 
-
-# ========================================
-# sample_lifecycle_node
-# ========================================
-add_executable(sample_lifecycle_node
-  src/sample_lifecycle_node.cpp
-)
-ament_target_dependencies(sample_lifecycle_node
-  rclcpp
-  rclcpp_lifecycle
-  lifecycle_msgs
-)
-target_include_directories(sample_lifecycle_node PUBLIC
-  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
-  $<INSTALL_INTERFACE:include>
-)
-
-# ========================================
-# test_recipe_node（単一ノード用の古いテストならあってもOK）
-# ========================================
-add_executable(test_recipe_node
-  src/test_recipe_node.cpp
-)
-ament_target_dependencies(test_recipe_node
-  rclcpp
-  lifecycle_msgs
-)
-target_include_directories(test_recipe_node PUBLIC
-  $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
-  $<INSTALL_INTERFACE:include>
-)
 
 # ========================================
 # multiple_node_manager
@@ -135,7 +104,7 @@ target_link_libraries(multiple_node_manager
 # A_node / B_node / C_node（各 LifecycleNode）
 # ========================================
 add_executable(a_node
-  src/a_node.cpp
+  src/sample/a_node.cpp
 )
 ament_target_dependencies(a_node
   rclcpp
@@ -149,7 +118,7 @@ target_include_directories(a_node PUBLIC
 )
 
 add_executable(b_node
-  src/b_node.cpp
+  src/sample/b_node.cpp
 )
 ament_target_dependencies(b_node
   rclcpp
@@ -163,7 +132,7 @@ target_include_directories(b_node PUBLIC
 )
 
 add_executable(c_node
-  src/c_node.cpp
+  src/sample/c_node.cpp
 )
 ament_target_dependencies(c_node
   rclcpp
@@ -182,8 +151,6 @@ target_include_directories(c_node PUBLIC
 
 # 実行ファイルとライブラリをインストール
 install(TARGETS
-  sample_lifecycle_node
-  test_recipe_node
   multiple_node_manager
   a_node
   b_node
