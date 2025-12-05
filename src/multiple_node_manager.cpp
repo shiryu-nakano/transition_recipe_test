@@ -25,6 +25,7 @@ namespace transition_recipe_test
     class MultipleNodeManager : public rclcpp::Node
     {
     public:
+        // コンストラクタ
         MultipleNodeManager()
             : Node("multiple_node_manager")
         {
@@ -142,58 +143,20 @@ namespace transition_recipe_test
         }
 
         // ==== タイマーコールバック ====
-        void timer_callback_()
-        {
-            // 既に開始済みなら何もしない（GetState は最後に1回だけ）
-            // if (started_)
-            //{
-            //    return;
-            //}
-            double elapsed = (now() - start_time_).seconds();
-
-            // 1. まだ前回の GetState が返りきっていないなら何もしない
-            if (pending_semantic_updates_ != 0)
-            {
-                RCLCPP_WARN_THROTTLE(
-                    get_logger(), *get_clock(), 2000,
-                    "Previous GetState batch still pending (%zu), skip this tick.",
-                    pending_semantic_updates_);
-                return;
-            }
-
-            // 2. この時点で「前回バッチの snapshot」が current_semantic_state_ に入っている
-            //    → ここでグラフマッチングをする
-            maybe_log_semantic_state_graph();
-
-            // 3. 新しいバッチを開始（pending が node数 にリセットされる）
-            request_get_all_semantic_state();
-
-            RCLCPP_INFO(this->get_logger(), "Hello, elapsed %.2f sec", elapsed);
-
-            if (!started_ && elapsed >= 5.0)
-            {
-                started_ = true;
-                current_step_index_ = 0;
-
-                RCLCPP_INFO(this->get_logger(),
-                            "Starting TransitionRecipe: %s",
-                            recipe_.description.c_str());
-
-                execute_next_step();
-            }
-        }
-
         void timer_callback()
         {
             double elapsed = (now() - start_time_).seconds();
 
 
-            maybe_log_semantic_state_graph();
+            //maybe_log_semantic_state_graph();
             // ============================
             // ① まだ前回の GetState が返りきっていない場合はスキップ
+            // pending_semantic_updates_ は GetState の応答が返ってくるたびにデクリメントされる
+            // 値が 0 になると全ノード分の応答がそろったことになる
             // ============================
             if (pending_semantic_updates_ != 0)
                 return;
+
             // ============================
             // ② 前回の snapshot に対して Graph マッチング
             // ============================
@@ -205,12 +168,16 @@ namespace transition_recipe_test
             }
             else
             {
-                const std::string &current = *state_id_opt;
+                maybe_log_semantic_state();
+                RCLCPP_INFO(this->get_logger(),
+                            "[StateGraph] matched system_state = %s",
+                            state_id_opt->c_str());
+                const std::string &current_state_id = *state_id_opt; //型変換みたいなもん
 
                 // 初回（まだ記録無し）
                 if (last_state_id_.empty())
                 {
-                    last_state_id_ = current;
+                    last_state_id_ = current_state_id;
                     last_transition_time_ = now();
                 }
 
@@ -219,17 +186,19 @@ namespace transition_recipe_test
                 // ============================
                 double since_last = (now() - last_transition_time_).seconds();
 
+
+                // でもよう
                 if (since_last >= 10.0 && !recipe_running_) // ← レシピ実行中はスキップ
                 {
                     // 次の状態を決める（例として A→B→C→ALL_OFF→A… のサイクル）
-                    std::string target = determine_next_state(current);
+                    std::string target = determine_next_state(current_state_id);
 
                     RCLCPP_INFO(this->get_logger(),
                                 "[AutoTransition] %s → %s",
-                                current.c_str(), target.c_str());
+                                current_state_id.c_str(), target.c_str());
 
                     // レシピ生成
-                    auto recipe = build_transition_recipe(current, target);
+                    auto recipe = build_transition_recipe(current_state_id, target);
 
                     // レシピ実行
                     execute_transition_recipe(recipe);
@@ -240,9 +209,7 @@ namespace transition_recipe_test
                 }
             }
 
-            // ============================
-            // ④ 新しい GetState バッチを投げる
-            // ============================
+            // ④  
             request_get_all_semantic_state();
 
             RCLCPP_INFO(this->get_logger(),
@@ -269,7 +236,7 @@ namespace transition_recipe_test
 
             // レシピ開始！
             recipe_running_ = true;
-            recipe_ = recipe;
+            recipe_ = recipe;// 内部変数に代入する
             current_step_index_ = 0;
 
             RCLCPP_INFO(this->get_logger(),
@@ -409,14 +376,13 @@ namespace transition_recipe_test
         // 全ノードに対して GetState を一回だけ呼び， SemanticState を構築する
         SemanticState request_get_all_semantic_state()
         {
-            // 新しいスナップショットを開始
-            current_semantic_state_.node_states.clear();
-            pending_semantic_updates_ = node_names_.size();
+            current_semantic_state_.node_states.clear();    // SemanticStateをクリア
+            pending_semantic_updates_ = node_names_.size(); // 応答待ちカウンタをセット
 
             for (const auto &name : node_names_)
             {
                 auto it = getstate_clients_.find(name);
-                if (it == getstate_clients_.end())
+                if (it == getstate_clients_.end()) // Nodeが持っているクライアントに，nameのものが無い場合
                 {
                     RCLCPP_WARN(this->get_logger(),
                                 "No GetState client found for node '%s'", name.c_str());
@@ -438,7 +404,7 @@ namespace transition_recipe_test
             const std::string &node_name,
             const rclcpp::Client<GetState>::SharedPtr &client)
         {
-            if (!client->wait_for_service(500ms))
+            if (!client->wait_for_service(500ms)) // 500ms待ってもサービスがなければタイムアウト
             {
                 RCLCPP_WARN(this->get_logger(),
                             "GetState service not available for %s", node_name.c_str());
@@ -447,7 +413,7 @@ namespace transition_recipe_test
                 if (pending_semantic_updates_ > 0)
                 {
                     --pending_semantic_updates_;
-                    maybe_log_semantic_state();
+                    //maybe_log_semantic_state();
                 }
                 return;
             }
@@ -509,28 +475,6 @@ namespace transition_recipe_test
             }
         }
 
-        //
-        void maybe_log_semantic_state_graph()
-        {
-            if (pending_semantic_updates_ != 0)
-            {
-                return; // まだそろっていない
-            }
-
-            // ★ Graph に問い合わせて「どの状態IDか」を取得
-            auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
-            if (state_id_opt)
-            {
-                RCLCPP_INFO(this->get_logger(),
-                            "[StateGraph] matched system_state = %s",
-                            state_id_opt->c_str());
-            }
-            else
-            {
-                RCLCPP_WARN(this->get_logger(),
-                            "[StateGraph] no match for current SemanticState");
-            }
-        }
 
         // 全てのノードの SemanticState がそろったらログ出力
         void maybe_log_semantic_state()
