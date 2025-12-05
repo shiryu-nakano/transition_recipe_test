@@ -77,8 +77,6 @@ target_include_directories(simulator_node PUBLIC
 )
 
 
-
-
 # ========================================
 # multiple_node_manager
 # ========================================
@@ -88,6 +86,7 @@ add_executable(multiple_node_manager
 ament_target_dependencies(multiple_node_manager
   rclcpp
   lifecycle_msgs
+  geometry_msgs
 )
 target_include_directories(multiple_node_manager PUBLIC
   $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>

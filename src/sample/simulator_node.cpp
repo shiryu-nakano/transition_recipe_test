@@ -26,7 +26,6 @@ namespace transition_recipe_test
             x_ = this->get_parameter("initial_x").as_double();
             y_ = this->get_parameter("initial_y").as_double();
             theta_ = this->get_parameter("initial_theta").as_double();
-
             vx_ = 0.0;
             vtheta_ = 0.0;
 
@@ -82,7 +81,7 @@ namespace transition_recipe_test
             while (theta_ < -M_PI)
                 theta_ += 2.0 * M_PI;
 
-            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                                  "Robot position: x=%.2f, y=%.2f, theta=%.2f, vx=%.2f, vtheta=%.2f",
                                  x_, y_, theta_, vx_, vtheta_);
 
