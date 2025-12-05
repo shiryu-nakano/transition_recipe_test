@@ -177,7 +177,7 @@ namespace transition_recipe_test
             if (!state_id_opt)
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "[StateGraph] no match for current SemanticState");
+                            "NO MATCH for current SemanticState");
             }
             else
             {
@@ -193,10 +193,10 @@ namespace transition_recipe_test
                 double since_last = (now() - last_transition_time_).seconds();
 
                 RCLCPP_INFO(this->get_logger(),
-                            "[StateGraph] matched system_state = %s",
+                            "System State = %s",
                             current_state_id.c_str());
                 RCLCPP_INFO(this->get_logger(),
-                            "[AutoTransition] temp_count_=%d, since_last=%.2f sec",
+                            "temp_count_=%d, since_last=%.2f sec",
                             temp_count_, since_last);
 
                 // レシピ実行中はトリガー判定をスキップ
@@ -223,7 +223,7 @@ namespace transition_recipe_test
                     {
                         std::string target = "STATE_A_ONLY";
                         RCLCPP_INFO(this->get_logger(),
-                                    "[AutoTransition] Second transition: %s → %s",
+                                    "[ACT] Second transition: %s → %s",
                                     current_state_id.c_str(), target.c_str());
 
                         auto recipe = build_transition_recipe(current_state_id, target);
@@ -241,7 +241,7 @@ namespace transition_recipe_test
                         {
                             std::string target = "STATE_B_ONLY";
                             RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] Position trigger (B): dist=%.2f, %s → %s",
+                                        "[ACT] Position trigger (B): dist=%.2f, %s → %s",
                                         dist, current_state_id.c_str(), target.c_str());
 
                             auto recipe = build_transition_recipe(current_state_id, target);
@@ -260,7 +260,7 @@ namespace transition_recipe_test
                         {
                             std::string target = "STATE_C_ONLY";
                             RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] Position trigger (C): dist=%.2f, %s → %s",
+                                        "[ACT] Position trigger (C): dist=%.2f, %s → %s",
                                         dist, current_state_id.c_str(), target.c_str());
 
                             auto recipe = build_transition_recipe(current_state_id, target);
@@ -277,8 +277,8 @@ namespace transition_recipe_test
             // ③ 次の GetState バッチを投げる
             request_get_all_semantic_state();
 
-            RCLCPP_INFO(this->get_logger(),
-                        "Hello, elapsed %.2f sec", elapsed);
+            //RCLCPP_INFO(this->get_logger(),
+            //            "Hello, elapsed %.2f sec", elapsed);
         }
 
         void timer_callback_()
