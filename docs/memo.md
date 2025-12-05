@@ -66,7 +66,7 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
   * [ ] B2上記の条件判定を行うためのダミークラス，ダミー関数を作成して呼び出す形式に変更
     * [X] ~~*transition strategy?*~~ [2025-12-06]
     * [X] ~~*B3それでも同様の挙動になるのを確認する*~~ [2025-12-06]
-    * [ ] B4 外部クラスの関数で判定できるようになったら，その関数から直接所望の``Transition recipe``をもらうように変更する
+    * [X] ~~*B4 外部クラスの関数で判定できるようになったら，その関数から直接所望の``Transition recipe``をもらうように変更する*~~ [2025-12-06]
 
 ---
 

@@ -11,7 +11,7 @@
 #include "transition_recipe_test/common_types.hpp"
 #include "transition_recipe_test/graph.hpp"
 #include "transition_recipe_test/graph_generator.hpp"
-#include "transition_recipe_test/recipe_generator.hpp"
+// #include "transition_recipe_test/recipe_generator.hpp"
 #include "transition_recipe_test/switching_strategy.hpp"
 
 using namespace std::chrono_literals;
@@ -203,101 +203,29 @@ namespace transition_recipe_test
                             temp_count_, since_last, x_, y_);
 
                 // レシピ実行中はトリガー判定をスキップ
-                /*
                 if (!recipe_running_)
                 {
+                    std::string target_state; // outパラ用
 
-                    // フェーズ0: 起動から5秒後に STATE_ALL_OFF
-                    if (temp_count_ == 0 && since_last >= 5.0)
-                    {
-                        std::string target = "STATE_ALL_OFF";
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[AutoTransition] First transition: %s → %s",
-                                    current_state_id.c_str(), target.c_str());
-
-                        auto recipe = build_transition_recipe(current_state_id, target);
-                        execute_transition_recipe(recipe);
-
-                        last_state_id_ = target;
-                        last_transition_time_ = now();
-                        temp_count_ = 1;
-                    }
-                    // フェーズ1: さらに5秒後に STATE_A_ONLY
-                    else if (temp_count_ == 1 && since_last >= 5.0)
-                    {
-                        std::string target = "STATE_A_ONLY";
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[ACT] Second transition: %s → %s",
-                                    current_state_id.c_str(), target.c_str());
-
-                        auto recipe = build_transition_recipe(current_state_id, target);
-                        execute_transition_recipe(recipe);
-
-                        last_state_id_ = target;
-                        last_transition_time_ = now();
-                        temp_count_ = 2;
-                    }
-                    // フェーズ2: (20,0) に近づいたら STATE_B_ONLY
-                    else if (temp_count_ == 2)
-                    {
-                        double dist = std::hypot(x_ - 20.0, y_ - 0.0);
-                        if (dist < 1.0)
-                        {
-                            std::string target = "STATE_B_ONLY";
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[ACT] Position trigger (B): dist=%.2f, %s → %s",
-                                        dist, current_state_id.c_str(), target.c_str());
-
-                            auto recipe = build_transition_recipe(current_state_id, target);
-                            execute_transition_recipe(recipe);
-
-                            last_state_id_ = target;
-                            last_transition_time_ = now();
-                            temp_count_ = 3;
-                        }
-                    }
-                    // フェーズ3: (40,0) に近づいたら STATE_C_ONLY
-                    else if (temp_count_ == 3)
-                    {
-                        double dist = std::hypot(x_ - 40.0, y_ - 0.0);
-                        if (dist < 1.0)
-                        {
-                            std::string target = "STATE_C_ONLY";
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[ACT] Position trigger (C): dist=%.2f, %s → %s",
-                                        dist, current_state_id.c_str(), target.c_str());
-
-                            auto recipe = build_transition_recipe(current_state_id, target);
-                            execute_transition_recipe(recipe);
-
-                            last_state_id_ = target;
-                            last_transition_time_ = now();
-                            temp_count_ = 4; // 完了フェーズ
-                        }
-                    }
-                }
-                */
-                if (!recipe_running_)
-                {
-                    auto target_opt = switching_.decide_next_state(
+                    auto maybe_recipe = switching_.decide_next_state(
                         current_state_id,
                         temp_count_, // in/out
                         since_last,
                         x_,
-                        y_);
+                        y_,
+                        target_state); // out
 
-                    if (target_opt)
+                    if (maybe_recipe)
                     {
-                        const std::string &target = *target_opt;
+                        const auto &recipe = *maybe_recipe;
 
                         RCLCPP_INFO(this->get_logger(),
                                     "[AutoTransition] %s → %s (phase=%d)",
-                                    current_state_id.c_str(), target.c_str(), temp_count_);
+                                    current_state_id.c_str(), target_state.c_str(), temp_count_);
 
-                        auto recipe = build_transition_recipe(current_state_id, target);
                         execute_transition_recipe(recipe);
 
-                        last_state_id_ = target;
+                        last_state_id_ = target_state;
                         last_transition_time_ = now();
                     }
                 }
