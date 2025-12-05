@@ -7,11 +7,11 @@ import os
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('transition_recipe_test')
-    params_file = os.path.join(pkg_share, 'config', 'multiple_nodes.yaml')
+    params_file = os.path.join(pkg_share, 'config', 'sample/multiple_nodes.yaml')
 
     # ★ グラフ YAML のデフォルトパス
     default_graph_yaml = os.path.join(
-        pkg_share, 'config', 'state_graph.yaml'
+        pkg_share, 'config', 'sample/state_graph.yaml'
     )
 
     # ★ コマンドラインからも変えられるように LaunchArgument を定義
@@ -24,7 +24,7 @@ def generate_launch_description():
     config_file = os.path.join(
         get_package_share_directory("transition_recipe_test"),
         'config',
-        'sim_params.yaml'
+        'sample/sim_params.yaml'
     )
     
     # RViz設定ファイルのパス
