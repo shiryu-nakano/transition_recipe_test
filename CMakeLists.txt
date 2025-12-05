@@ -46,6 +46,7 @@ target_link_libraries(graph_lib
 # recipe_library（ROS 非依存）
 # ============================================
 add_library(recipe_lib
+  src/switching_strategy.cpp 
   src/recipe_generator.cpp
 )
 

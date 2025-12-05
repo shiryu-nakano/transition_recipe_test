@@ -12,6 +12,7 @@
 #include "transition_recipe_test/graph.hpp"
 #include "transition_recipe_test/graph_generator.hpp"
 #include "transition_recipe_test/recipe_generator.hpp"
+#include "transition_recipe_test/switching_strategy.hpp"
 
 using namespace std::chrono_literals;
 
@@ -115,6 +116,8 @@ namespace transition_recipe_test
         double y_;
         int temp_count_ = 0;
 
+        SwitchingStrategy switching_; // 状態遷移判定ロジック
+
         // ==== 初期化系 ====
 
         void init_transition_map()
@@ -200,6 +203,7 @@ namespace transition_recipe_test
                             temp_count_, since_last, x_, y_);
 
                 // レシピ実行中はトリガー判定をスキップ
+                /*
                 if (!recipe_running_)
                 {
 
@@ -272,6 +276,31 @@ namespace transition_recipe_test
                         }
                     }
                 }
+                */
+                if (!recipe_running_)
+                {
+                    auto target_opt = switching_.decide_next_state(
+                        current_state_id,
+                        temp_count_, // in/out
+                        since_last,
+                        x_,
+                        y_);
+
+                    if (target_opt)
+                    {
+                        const std::string &target = *target_opt;
+
+                        RCLCPP_INFO(this->get_logger(),
+                                    "[AutoTransition] %s → %s (phase=%d)",
+                                    current_state_id.c_str(), target.c_str(), temp_count_);
+
+                        auto recipe = build_transition_recipe(current_state_id, target);
+                        execute_transition_recipe(recipe);
+
+                        last_state_id_ = target;
+                        last_transition_time_ = now();
+                    }
+                }
             }
 
             // ③ 次の GetState バッチを投げる
@@ -279,138 +308,6 @@ namespace transition_recipe_test
 
             // RCLCPP_INFO(this->get_logger(),
             //             "Hello, elapsed %.2f sec", elapsed);
-        }
-
-        void timer_callback_()
-        {
-            double elapsed = (now() - start_time_).seconds();
-
-            // ① まだ前回の GetState が返りきっていない場合はスキップ
-            // pending_semantic_updates_ は GetState の応答が返ってくるたびにデクリメントされる
-            // 値が 0 になると全ノード分の応答がそろったことになる
-            if (pending_semantic_updates_ != 0)
-                return;
-
-            // ============================
-            // ② 前回の snapshot に対して Graph マッチング
-            // ============================
-            auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
-            if (!state_id_opt)
-            {
-                RCLCPP_WARN(this->get_logger(),
-                            "[StateGraph] no match for current SemanticState");
-            }
-            else
-            {
-                // maybe_log_semantic_state();
-                RCLCPP_INFO(this->get_logger(),
-                            "[StateGraph] matched system_state = %s",
-                            state_id_opt->c_str());
-                const std::string &current_state_id = *state_id_opt; // 型変換みたいなもん
-
-                // 初回（まだ記録無し）
-                if (last_state_id_.empty())
-                {
-                    last_state_id_ = current_state_id;
-                    last_transition_time_ = now();
-                }
-
-                // ============================
-                // ③ 10秒経過したら次の状態へ遷移
-                // ============================
-                double since_last = (now() - last_transition_time_).seconds();
-
-                // 別ロジックの実装
-                //  座標が所定の位置に来たら状態遷移を行う
-                /*
-                初回は5秒経過後に全てのノードをInactiveにする
-                さらにその後5秒後にA Onlyに遷移する→x＋方向に直進
-                (20,0)に到達したらB Onlyに遷移する→x＋方向に加速して直進
-
-                */
-                RCLCPP_INFO(this->get_logger(),
-                            "[AutoTransition] temp_count_=%d",
-                            temp_count_);
-                // since_last のログ出力
-                RCLCPP_INFO(this->get_logger(),
-                            "[AutoTransition] since_last=%.2f sec",
-                            since_last);
-                // デモ用
-                if (!recipe_running_) // ← レシピ実行中はスキップ
-                {
-                    if (temp_count_ < 2)
-                    {
-                        std::string target;
-                        if (temp_count_ == 0 && since_last >= 5.0)
-                        {
-                            // ログ
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] First transition after start.");
-                            target = "STATE_ALL_OFF"; // 最初は全ノードInactive
-                        }
-                        else if (temp_count_ == 1 && since_last >= 10.0)
-                        {
-                            // ログ
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] Second transition after 10 sec.");
-                            target = "STATE_A_ONLY"; // 次にA Only
-                        }
-
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[AutoTransition] %s → %s",
-                                    current_state_id.c_str(), target.c_str());
-
-                        auto recipe = build_transition_recipe(current_state_id, target);
-                        execute_transition_recipe(recipe);
-
-                        last_state_id_ = target;
-                        last_transition_time_ = now();
-                        temp_count_ += 1;
-                    }
-                    if (temp_count_ == 2)
-                    {
-                        double target_x = 20.0;
-                        double target_y = 0.0;
-                        double dist = sqrt(pow(x_ - target_x, 2) + pow(y_ - target_y, 2));
-                        if (dist < 1.0)
-                        {
-                            std::string target = "STATE_B_ONLY"; // 目標位置に到達したら
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] %s → %s",
-                                        current_state_id.c_str(), target.c_str());
-                            auto recipe = build_transition_recipe(current_state_id, target);
-                            execute_transition_recipe(recipe);
-                            // 更新
-                            last_state_id_ = target;
-                            last_transition_time_ = now();
-                        }
-                    }
-                    if (temp_count_ > 2)
-                    {
-                        double target_x = 40.0;
-                        double target_y = 0.0;
-                        double dist = sqrt(pow(x_ - target_x, 2) + pow(y_ - target_y, 2));
-                        if (dist < 1.0)
-                        {
-                            std::string target = "STATE_C_ONLY"; // 目標位置に到達したら
-                            RCLCPP_INFO(this->get_logger(),
-                                        "[AutoTransition] %s → %s",
-                                        current_state_id.c_str(), target.c_str());
-                            auto recipe = build_transition_recipe(current_state_id, target);
-                            execute_transition_recipe(recipe);
-                            // 更新
-                            last_state_id_ = target;
-                            last_transition_time_ = now();
-                        }
-                    }
-                }
-            }
-
-            // ④
-            request_get_all_semantic_state();
-
-            RCLCPP_INFO(this->get_logger(),
-                        "Hello, elapsed %.2f sec", elapsed);
         }
 
         // PoseCallBack
