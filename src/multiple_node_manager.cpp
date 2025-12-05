@@ -2,6 +2,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <lifecycle_msgs/srv/change_state.hpp>
 #include <lifecycle_msgs/srv/get_state.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 
 #include <map>
 #include <string>
@@ -61,6 +62,16 @@ namespace transition_recipe_test
             // Recipe 構築
             recipe_ = create_sample_recipe();
 
+            pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+                "current_pose", 10,
+                std::bind(&MultipleNodeManager::pose_callback, this, std::placeholders::_1));
+
+            // x,y
+            this->declare_parameter<double>("initial_x", 0.0);
+            this->declare_parameter<double>("initial_y", 0.0);
+            x_ = this->get_parameter("initial_x").as_double();
+            y_ = this->get_parameter("initial_y").as_double();
+
             // operation → Transition ID のマップ
             init_transition_map();
 
@@ -95,6 +106,14 @@ namespace transition_recipe_test
         std::string last_state_id_;
 
         std::map<std::string, uint8_t> transition_map_;
+
+        // サブスクライバ
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+
+        // 位置情報
+        double x_;
+        double y_;
+        int temp_count_ = 0;
 
         // ==== 初期化系 ====
 
@@ -147,13 +166,128 @@ namespace transition_recipe_test
         {
             double elapsed = (now() - start_time_).seconds();
 
+            // ① まだ前回の GetState が返りきっていない場合はスキップ
+            if (pending_semantic_updates_ != 0)
+            {
+                return;
+            }
 
-            //maybe_log_semantic_state_graph();
-            // ============================
+            // ② 前回の snapshot に対して Graph マッチング
+            auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
+            if (!state_id_opt)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "[StateGraph] no match for current SemanticState");
+            }
+            else
+            {
+                const std::string &current_state_id = *state_id_opt;
+
+                // 初回（まだ記録無し）
+                if (last_state_id_.empty())
+                {
+                    last_state_id_ = current_state_id;
+                    last_transition_time_ = now();
+                }
+
+                double since_last = (now() - last_transition_time_).seconds();
+
+                RCLCPP_INFO(this->get_logger(),
+                            "[StateGraph] matched system_state = %s",
+                            current_state_id.c_str());
+                RCLCPP_INFO(this->get_logger(),
+                            "[AutoTransition] temp_count_=%d, since_last=%.2f sec",
+                            temp_count_, since_last);
+
+                // レシピ実行中はトリガー判定をスキップ
+                if (!recipe_running_)
+                {
+
+                    // フェーズ0: 起動から5秒後に STATE_ALL_OFF
+                    if (temp_count_ == 0 && since_last >= 5.0)
+                    {
+                        std::string target = "STATE_ALL_OFF";
+                        RCLCPP_INFO(this->get_logger(),
+                                    "[AutoTransition] First transition: %s → %s",
+                                    current_state_id.c_str(), target.c_str());
+
+                        auto recipe = build_transition_recipe(current_state_id, target);
+                        execute_transition_recipe(recipe);
+
+                        last_state_id_ = target;
+                        last_transition_time_ = now();
+                        temp_count_ = 1;
+                    }
+                    // フェーズ1: さらに5秒後に STATE_A_ONLY
+                    else if (temp_count_ == 1 && since_last >= 5.0)
+                    {
+                        std::string target = "STATE_A_ONLY";
+                        RCLCPP_INFO(this->get_logger(),
+                                    "[AutoTransition] Second transition: %s → %s",
+                                    current_state_id.c_str(), target.c_str());
+
+                        auto recipe = build_transition_recipe(current_state_id, target);
+                        execute_transition_recipe(recipe);
+
+                        last_state_id_ = target;
+                        last_transition_time_ = now();
+                        temp_count_ = 2;
+                    }
+                    // フェーズ2: (20,0) に近づいたら STATE_B_ONLY
+                    else if (temp_count_ == 2)
+                    {
+                        double dist = std::hypot(x_ - 20.0, y_ - 0.0);
+                        if (dist < 1.0)
+                        {
+                            std::string target = "STATE_B_ONLY";
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] Position trigger (B): dist=%.2f, %s → %s",
+                                        dist, current_state_id.c_str(), target.c_str());
+
+                            auto recipe = build_transition_recipe(current_state_id, target);
+                            execute_transition_recipe(recipe);
+
+                            last_state_id_ = target;
+                            last_transition_time_ = now();
+                            temp_count_ = 3;
+                        }
+                    }
+                    // フェーズ3: (40,0) に近づいたら STATE_C_ONLY
+                    else if (temp_count_ == 3)
+                    {
+                        double dist = std::hypot(x_ - 40.0, y_ - 0.0);
+                        if (dist < 1.0)
+                        {
+                            std::string target = "STATE_C_ONLY";
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] Position trigger (C): dist=%.2f, %s → %s",
+                                        dist, current_state_id.c_str(), target.c_str());
+
+                            auto recipe = build_transition_recipe(current_state_id, target);
+                            execute_transition_recipe(recipe);
+
+                            last_state_id_ = target;
+                            last_transition_time_ = now();
+                            temp_count_ = 4; // 完了フェーズ
+                        }
+                    }
+                }
+            }
+
+            // ③ 次の GetState バッチを投げる
+            request_get_all_semantic_state();
+
+            RCLCPP_INFO(this->get_logger(),
+                        "Hello, elapsed %.2f sec", elapsed);
+        }
+
+        void timer_callback_()
+        {
+            double elapsed = (now() - start_time_).seconds();
+
             // ① まだ前回の GetState が返りきっていない場合はスキップ
             // pending_semantic_updates_ は GetState の応答が返ってくるたびにデクリメントされる
             // 値が 0 になると全ノード分の応答がそろったことになる
-            // ============================
             if (pending_semantic_updates_ != 0)
                 return;
 
@@ -168,11 +302,11 @@ namespace transition_recipe_test
             }
             else
             {
-                maybe_log_semantic_state();
+                // maybe_log_semantic_state();
                 RCLCPP_INFO(this->get_logger(),
                             "[StateGraph] matched system_state = %s",
                             state_id_opt->c_str());
-                const std::string &current_state_id = *state_id_opt; //型変換みたいなもん
+                const std::string &current_state_id = *state_id_opt; // 型変換みたいなもん
 
                 // 初回（まだ記録無し）
                 if (last_state_id_.empty())
@@ -186,34 +320,111 @@ namespace transition_recipe_test
                 // ============================
                 double since_last = (now() - last_transition_time_).seconds();
 
+                // 別ロジックの実装
+                //  座標が所定の位置に来たら状態遷移を行う
+                /*
+                初回は5秒経過後に全てのノードをInactiveにする
+                さらにその後5秒後にA Onlyに遷移する→x＋方向に直進
+                (20,0)に到達したらB Onlyに遷移する→x＋方向に加速して直進
 
-                // でもよう
-                if (since_last >= 10.0 && !recipe_running_) // ← レシピ実行中はスキップ
+                */
+                RCLCPP_INFO(this->get_logger(),
+                            "[AutoTransition] temp_count_=%d",
+                            temp_count_);
+                // since_last のログ出力
+                RCLCPP_INFO(this->get_logger(),
+                            "[AutoTransition] since_last=%.2f sec",
+                            since_last);
+                // デモ用
+                if (!recipe_running_) // ← レシピ実行中はスキップ
                 {
-                    // 次の状態を決める（例として A→B→C→ALL_OFF→A… のサイクル）
-                    std::string target = determine_next_state(current_state_id);
+                    if (temp_count_ < 2)
+                    {
+                        std::string target;
+                        if (temp_count_ == 0 && since_last >= 5.0)
+                        {
+                            // ログ
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] First transition after start.");
+                            target = "STATE_ALL_OFF"; // 最初は全ノードInactive
+                        }
+                        else if (temp_count_ == 1 && since_last >= 10.0)
+                        {
+                            // ログ
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] Second transition after 10 sec.");
+                            target = "STATE_A_ONLY"; // 次にA Only
+                        }
 
-                    RCLCPP_INFO(this->get_logger(),
-                                "[AutoTransition] %s → %s",
-                                current_state_id.c_str(), target.c_str());
+                        RCLCPP_INFO(this->get_logger(),
+                                    "[AutoTransition] %s → %s",
+                                    current_state_id.c_str(), target.c_str());
 
-                    // レシピ生成
-                    auto recipe = build_transition_recipe(current_state_id, target);
+                        auto recipe = build_transition_recipe(current_state_id, target);
+                        execute_transition_recipe(recipe);
 
-                    // レシピ実行
-                    execute_transition_recipe(recipe);
-
-                    // 更新
-                    last_state_id_ = target;
-                    last_transition_time_ = now();
+                        last_state_id_ = target;
+                        last_transition_time_ = now();
+                        temp_count_ += 1;
+                    }
+                    if (temp_count_ == 2)
+                    {
+                        double target_x = 20.0;
+                        double target_y = 0.0;
+                        double dist = sqrt(pow(x_ - target_x, 2) + pow(y_ - target_y, 2));
+                        if (dist < 1.0)
+                        {
+                            std::string target = "STATE_B_ONLY"; // 目標位置に到達したら
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] %s → %s",
+                                        current_state_id.c_str(), target.c_str());
+                            auto recipe = build_transition_recipe(current_state_id, target);
+                            execute_transition_recipe(recipe);
+                            // 更新
+                            last_state_id_ = target;
+                            last_transition_time_ = now();
+                        }
+                    }
+                    if (temp_count_ > 2)
+                    {
+                        double target_x = 40.0;
+                        double target_y = 0.0;
+                        double dist = sqrt(pow(x_ - target_x, 2) + pow(y_ - target_y, 2));
+                        if (dist < 1.0)
+                        {
+                            std::string target = "STATE_C_ONLY"; // 目標位置に到達したら
+                            RCLCPP_INFO(this->get_logger(),
+                                        "[AutoTransition] %s → %s",
+                                        current_state_id.c_str(), target.c_str());
+                            auto recipe = build_transition_recipe(current_state_id, target);
+                            execute_transition_recipe(recipe);
+                            // 更新
+                            last_state_id_ = target;
+                            last_transition_time_ = now();
+                        }
+                    }
                 }
             }
 
-            // ④  
+            // ④
             request_get_all_semantic_state();
 
             RCLCPP_INFO(this->get_logger(),
                         "Hello, elapsed %.2f sec", elapsed);
+        }
+
+        // PoseCallBack
+        void pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+        {
+
+            x_ = msg->pose.position.x;
+            y_ = msg->pose.position.y;
+            /*RCLCPP_INFO(
+                this->get_logger(),
+                "Received pose: x=%.3f, y=%.3f",
+                msg->pose.position.x,
+                msg->pose.position.y);
+            */
         }
 
         // ==== Recipe 実行 ====
@@ -236,7 +447,7 @@ namespace transition_recipe_test
 
             // レシピ開始！
             recipe_running_ = true;
-            recipe_ = recipe;// 内部変数に代入する
+            recipe_ = recipe; // 内部変数に代入する
             current_step_index_ = 0;
 
             RCLCPP_INFO(this->get_logger(),
@@ -357,8 +568,8 @@ namespace transition_recipe_test
         // TODO 後で変更
         std::string determine_next_state(const std::string &current)
         {
-            if(current =="ALL_UNCONFIGURED")
-                return "STATE_ALL_OFF"; 
+            if (current == "ALL_UNCONFIGURED")
+                return "STATE_ALL_OFF";
             if (current == "STATE_ALL_OFF")
                 return "STATE_A_ONLY";
             if (current == "STATE_A_ONLY")
@@ -413,7 +624,7 @@ namespace transition_recipe_test
                 if (pending_semantic_updates_ > 0)
                 {
                     --pending_semantic_updates_;
-                    //maybe_log_semantic_state();
+                    // maybe_log_semantic_state();
                 }
                 return;
             }
@@ -428,11 +639,11 @@ namespace transition_recipe_test
                         auto resp = future.get();
 
                         // ① 各ノードの状態を従来通り LOG 出力
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[%s] current lifecycle state: id=%u, label=%s",
-                                    node_name.c_str(),
-                                    resp->current_state.id,
-                                    resp->current_state.label.c_str());
+                        // RCLCPP_INFO(this->get_logger(),
+                        //            "[%s] current lifecycle state: id=%u, label=%s",
+                        //            node_name.c_str(),
+                        //            resp->current_state.id,
+                        //            resp->current_state.label.c_str());
 
                         // ② SemanticState に反映
                         current_semantic_state_.node_states[node_name] =
@@ -474,7 +685,6 @@ namespace transition_recipe_test
                 return SemanticState::State::UNKNOWN;
             }
         }
-
 
         // 全てのノードの SemanticState がそろったらログ出力
         void maybe_log_semantic_state()
