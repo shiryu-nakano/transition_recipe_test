@@ -196,8 +196,8 @@ namespace transition_recipe_test
                             "System State = %s",
                             current_state_id.c_str());
                 RCLCPP_INFO(this->get_logger(),
-                            "temp_count_=%d, since_last=%.2f sec",
-                            temp_count_, since_last);
+                            "temp_count_=%d, since_last=%.2f sec, x=%.3f, y=%.3f",
+                            temp_count_, since_last, x_, y_);
 
                 // レシピ実行中はトリガー判定をスキップ
                 if (!recipe_running_)
@@ -277,8 +277,8 @@ namespace transition_recipe_test
             // ③ 次の GetState バッチを投げる
             request_get_all_semantic_state();
 
-            //RCLCPP_INFO(this->get_logger(),
-            //            "Hello, elapsed %.2f sec", elapsed);
+            // RCLCPP_INFO(this->get_logger(),
+            //             "Hello, elapsed %.2f sec", elapsed);
         }
 
         void timer_callback_()
