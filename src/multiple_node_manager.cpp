@@ -167,7 +167,7 @@ namespace transition_recipe_test
         // ==== タイマーコールバック ====
         void timer_callback()
         {
-            double elapsed = (now() - start_time_).seconds();
+            // double elapsed = (now() - start_time_).seconds();
 
             // ① まだ前回の GetState が返りきっていない場合はスキップ
             if (pending_semantic_updates_ != 0)
