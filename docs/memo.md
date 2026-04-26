@@ -6,6 +6,8 @@
 ## 複数のLifecycleNodeがある時の実装テスト 
 branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/applicate_multiple_nodes
 
+### チェックリスト
+
 - やりたいこと
   - ２つ以上のlifecycle nodeがあった時に，それらを同時に制御することでシステム全体のモードを切り替える．例えばAとBがある時，Aがon, Bがoffの状態から，Aがoff, Bがonの状態に切り替える．これを管理しやすくするために，``struct Transition Recipe``　を導入した．
   - 複数のnodeの状態の組み合わせによってシステムの状態を一意に定めたいので``struct SemanticState``を導入した．
@@ -59,16 +61,39 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
 
 **状態遷移判定の実装**
 これまで秒数カウントなどで状態遷移を実験してきた
-* [ ] シミュレーションができるようになったら，場所によってareaの切り替えを行うロジックを実装する→（A）
-  * [ ] 上記ロジックのテストを行う
+* [X] ~~*シミュレーションができるようになったら，場所によってareaの切り替えを行うロジックを実装する→（A）*~~ [2025-12-06]
+  * [X] ~~*上記ロジックのテストを行う*~~ [2025-12-06]
     * [X] ~~*subscriberでposeを持って来れるか確認*~~ [2025-12-06]
     * [X] ~~*B1それをもとになんらか条件判定で切り替える*~~ [2025-12-06] 
-  * [ ] B2上記の条件判定を行うためのダミークラス，ダミー関数を作成して呼び出す形式に変更
+  * [X] ~~*B2上記の条件判定を行うためのダミークラス，ダミー関数を作成して呼び出す形式に変更*~~ [2025-12-06]
     * [X] ~~*transition strategy?*~~ [2025-12-06]
     * [X] ~~*B3それでも同様の挙動になるのを確認する*~~ [2025-12-06]
     * [X] ~~*B4 外部クラスの関数で判定できるようになったら，その関数から直接所望の``Transition recipe``をもらうように変更する*~~ [2025-12-06]
 
 ---
+**gnss-emcl用の拡張→branch:develop/area_state_switch**
+- [ ] gnss, emclノードを使ったlaunchファイルの作成
+  - [ ] P1:実機で実験する？
+  - [ ] P2:シミュレーションベースでも，経過時間だけでもいいので一旦動かしてみてもいいかもしれない
+  - [ ] P3:切り替えポイントをyamファイルから読み込めるようにする→優先度低い．環境は変化しないので暫定でハードコーディングでも差し支えない
+    - gnss→emcl→gnss→emcl→gnssと遷移することが予め決まっている
+    - 実際は．．．
+      - STATE_ALL_UNCONFIGURED→STATE_ALL_OFF→ (ここから開始)
+      GNSS_ONLY→EMCL_ONLY→GNSS_ONLY→EMCL_ONLY→GNSS_ONLY
+      となる
+- [ ] P4:Areaの情報をpublishする→経路計画用管理のノードがこれをみて判断に使うと思われる
+  - [ ] topic echoでこのトピック監視して正しいことを確認する．
+- [ ] ここまででとりあえずタスクPは完了
+
+**preliminary**
+* [ ] gnss, emclがそれぞれlifecycleで普通に動くかどうかが怪しい．
+* [ ]  gnssに関しては，rtk_judgeをlifecycleにしていれば良い
+* [X] ~~*それぞれビルドする*~~ [2025-12-06]
+  * [X] ~~*emcl*~~ [2025-12-06]
+  * [X] ~~*gnss*~~ [2025-12-06]
+* [ ] 単体で立ち上げて，ひとまずchange stateできるかをトピックで試す
+  * [ ] gnss
+  * [ ] emcl
 
 **advanced**
 * [ ] 別パッケージで実装したノードとの連携ができるかを確認する
