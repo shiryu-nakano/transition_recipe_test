@@ -55,9 +55,10 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
   * さらに言えば状態管理と，状態遷移は分けるべきか共存すべきか？
   * いずれにせよ，今作っているものを土台にして考えること
 
-* [ ] arcanain_simulator simulatornodeで可視化できるようにする
-  * [ ] launchでsimulator nodeを読んであれこれ設定すれば動いてくれるはず
+* [X] arcanain_simulator simulatornodeで可視化できるようにする
+  * [X] launchでsimulator nodeを読んであれこれ設定すれば動いてくれるはず
 
+---
 
 **状態遷移判定の実装**
 これまで秒数カウントなどで状態遷移を実験してきた
@@ -97,8 +98,9 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
 
 **advanced**
 * [ ] 別パッケージで実装したノードとの連携ができるかを確認する
-  * [ ] 特にarcanain_simulatorとの連携確認は重要事項
-  * [ ] simulatorを通してロボットを適当に動かす
+  * [X] 特にarcanain_simulatorとの連携確認は重要事項
+  * [X] simulatorを通してロボットを適当に動かす
+
 
 **Advanced +**
 * [ ] pure_pursuit, dwa, stop, inplace_turnと連携する→READMEに記載する
