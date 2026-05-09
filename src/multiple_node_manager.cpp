@@ -127,7 +127,7 @@ namespace transition_recipe_test
         double y_;
         int temp_count_ = 0;
 
-        SwitchingStrategy switching_; // 状態遷移判定ロジック
+        SwitchingStrategy switcher_; // 状態遷移判定ロジック
         // TODO　このStrategyを実装できればOK！
 
         // ==== 初期化系 ====
@@ -169,7 +169,7 @@ namespace transition_recipe_test
                 return;
             }
 
-            // ② 前回の snapshot に対して Graph マッチング
+            // ② client経由で取得した最新のsemanticStateをKeyにしてgraphからstate_id を取得
             auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
             if (!state_id_opt)
             {
@@ -200,10 +200,11 @@ namespace transition_recipe_test
                 {
                     std::string target_state; // outパラ用
 
-                    auto maybe_recipe = switching_.decide_next_state(
+                    // SwitchingStrategyクラスによって
+                    auto maybe_recipe = switcher_.decide_next_state(
                         current_state_id,
-                        temp_count_, // in/out
-                        since_last,
+                        temp_count_, // 
+                        since_last, // 前回状態遷移してからの経過時間
                         x_,
                         y_,
                         target_state); // out
