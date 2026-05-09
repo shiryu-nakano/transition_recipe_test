@@ -72,11 +72,27 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
     * [X] ~~*B4 外部クラスの関数で判定できるようになったら，その関数から直接所望の``Transition recipe``をもらうように変更する*~~ [2025-12-06]
 
 ---
+
+**現状整理（2026-05-09）**
+- 2つのリポジトリがある
+  - それぞれ違う目的、違う機能があるが、最終的に一つにまとめる予定
+- [ ] このリポジトリで提供できる機能を確認する
+  - graphを用いた状態管理
+    - graphの実態はdict[string:state_id：semanticState]
+    - lifecycle clientによってtimerでそれぞれのnodeの状態を取得して、semantic stateを作る
+    - 
+- [ ] もう一つのリポジトリで提供する機能を確認する
+- [X] 最終目的を確認する
+  - graphで状態管理。それぞれのノードが状態で、エッジが状態遷移
+    - lifecycleと通信して管理対象ノードの状態を監視する部分 
+      - 現在は
+    - 外界情報をサブスクライブして状態遷移の判定を行う部分
+
 **gnss-emcl用の拡張→branch:develop/area_state_switch**
 - [ ] gnss, emclノードを使ったlaunchファイルの作成
   - [ ] P1:実機で実験する？
   - [ ] P2:シミュレーションベースでも，経過時間だけでもいいので一旦動かしてみてもいいかもしれない
-  - [ ] P3:切り替えポイントをyamファイルから読み込めるようにする→優先度低い．環境は変化しないので暫定でハードコーディングでも差し支えない
+  - [ ] P3:切り替えポイントをyamlファイルから読み込めるようにする→優先度低い．環境は変化しないので暫定でハードコーディングでも差し支えない
     - gnss→emcl→gnss→emcl→gnssと遷移することが予め決まっている
     - 実際は．．．
       - STATE_ALL_UNCONFIGURED→STATE_ALL_OFF→ (ここから開始)
