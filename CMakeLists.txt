@@ -88,6 +88,7 @@ ament_target_dependencies(multiple_node_manager
   rclcpp
   lifecycle_msgs
   geometry_msgs
+  nav_msgs
 )
 target_include_directories(multiple_node_manager PUBLIC
   $<BUILD_INTERFACE:${PROJECT_INCLUDE_DIR}>
