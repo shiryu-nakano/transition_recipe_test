@@ -5,6 +5,12 @@ from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 import os
 
+"""
+Demo実行用launch
+このパッケージ内で実装しているサンプルノードとsimulatorを起動する。
+パッケージで閉じているため、ビルドするだけで実行できるようになっている。    
+"""
+
 def generate_launch_description():
     pkg_share = get_package_share_directory('transition_recipe_test')
     params_file = os.path.join(pkg_share, 'config', 'sample/multiple_nodes.yaml')
