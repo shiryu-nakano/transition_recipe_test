@@ -3,6 +3,7 @@
 #include <lifecycle_msgs/srv/change_state.hpp>
 #include <lifecycle_msgs/srv/get_state.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 #include <map>
 #include <string>
@@ -32,14 +33,17 @@ namespace transition_recipe_test
             : Node("multiple_node_manager")
         {
 
-            // 1. YAML から node_ids を読み込む
+            // 1.1 YAML から node_ids を読み込む
             node_names_ = this->declare_parameter<std::vector<std::string>>(
                 "node_ids",
                 std::vector<std::string>{} // デフォルトは空
             );
 
-            const std::string graph_yaml_path =
-                this->declare_parameter<std::string>("graph_yaml_path", "");
+            // 1.2 状態を管理するgraphをyamlから読み取る
+            const std::string graph_yaml_path = this->declare_parameter<std::string>(
+                "graph_yaml_path", 
+                ""
+            );
 
             if (node_names_.empty())
             {
@@ -54,26 +58,34 @@ namespace transition_recipe_test
                     RCLCPP_INFO(this->get_logger(), "  - %s", name.c_str());
                 }
             }
-            // 2. node_names_ からクライアント辞書を構築
+
+            // 2. node_names_ からクライアント辞書を構築 → lifecycle nodeの状態取得と状態遷移に用いる辞書
             init_clients_from_node_list();
 
             // 3. 状態グラフの構築
             generate_state_graph(graph_yaml_path);
 
             // Recipe 構築
-            recipe_ = create_sample_recipe();
+            //recipe_ = create_sample_recipe();
+
 
             pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
                 "current_pose", 10,
                 std::bind(&MultipleNodeManager::pose_callback, this, std::placeholders::_1));
 
-            // x,y
+	        odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+                "/odom", 10,
+                std::bind(&MultipleNodeManager::odom_callback, this, std::placeholders::_1));
+                // 注）odomからはPoseも取り出すことができる
+
+
+            // x,y の初期値（現状ハードコーディングしている）
             this->declare_parameter<double>("initial_x", 0.0);
             this->declare_parameter<double>("initial_y", 0.0);
             x_ = this->get_parameter("initial_x").as_double();
             y_ = this->get_parameter("initial_y").as_double();
 
-            // operation → Transition ID のマップ
+            // operation → Transition ID のマップ（辞書？）を作成
             init_transition_map();
 
             start_time_ = now();
@@ -110,6 +122,7 @@ namespace transition_recipe_test
 
         // サブスクライバ
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+	    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 
         // 位置情報
         double x_;
@@ -117,6 +130,7 @@ namespace transition_recipe_test
         int temp_count_ = 0;
 
         SwitchingStrategy switching_; // 状態遷移判定ロジック
+        // TODO　このStrategyを実装できればOK！
 
         // ==== 初期化系 ====
 
@@ -130,6 +144,7 @@ namespace transition_recipe_test
             transition_map_["shutdown"] = Transition::TRANSITION_UNCONFIGURED_SHUTDOWN;
         }
 
+        /*
         TransitionRecipe create_sample_recipe()
         {
             TransitionRecipe r;
@@ -148,6 +163,7 @@ namespace transition_recipe_test
 
             return r;
         }
+        */
 
         void init_clients_from_node_list()
         {
@@ -164,7 +180,7 @@ namespace transition_recipe_test
             }
         }
 
-        // ==== タイマーコールバック ====
+        // ==== タイマーコールバック（main処理） ====
         void timer_callback()
         {
             // double elapsed = (now() - start_time_).seconds();
@@ -202,8 +218,7 @@ namespace transition_recipe_test
                             "temp_count_=%d, since_last=%.2f sec, x=%.3f, y=%.3f",
                             temp_count_, since_last, x_, y_);
 
-                // レシピ実行中はトリガー判定をスキップ
-                if (!recipe_running_)
+                if (!recipe_running_)// レシピ実行中はトリガー判定をスキップ
                 {
                     std::string target_state; // outパラ用
 
@@ -252,11 +267,19 @@ namespace transition_recipe_test
             */
         }
 
+        // OdomCallBack
+        void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+        {
+            x_ = msg->pose.pose.position.x;
+            y_ = msg->pose.pose.position.y;
+        }
+
         // ==== Recipe 実行 ====
         void execute_transition_recipe(const TransitionRecipe &recipe)
         {
             if (recipe_running_)
             {
+                // 他の状態遷移が走っているとき
                 RCLCPP_WARN(this->get_logger(),
                             "Cannot start recipe '%s' because another recipe is running.",
                             recipe.description.c_str());
@@ -265,6 +288,7 @@ namespace transition_recipe_test
 
             if (recipe.steps.empty())
             {
+                // recipeがからのとき
                 RCLCPP_WARN(this->get_logger(),
                             "Recipe is empty: '%s'", recipe.description.c_str());
                 return;
