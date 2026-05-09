@@ -65,8 +65,6 @@ namespace transition_recipe_test
             // 3. 状態グラフの構築
             generate_state_graph(graph_yaml_path);
 
-            // Recipe 構築
-            //recipe_ = create_sample_recipe();
 
 
             pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -144,26 +142,6 @@ namespace transition_recipe_test
             transition_map_["shutdown"] = Transition::TRANSITION_UNCONFIGURED_SHUTDOWN;
         }
 
-        /*
-        TransitionRecipe create_sample_recipe()
-        {
-            TransitionRecipe r;
-            r.description = "Configure all managed nodes (UNCONFIGURED -> INACTIVE)";
-
-            // node_ids に登録されている全ノードを configure 対象にする
-            for (const auto &name : node_names_)
-            {
-                ActionStep step;
-                step.target_node_name = name; // "A_node" / "B_node" / "C_node"
-                step.operation = "configure";
-                step.timeout_s = 3.0;
-                step.retry = 0;
-                r.steps.push_back(step);
-            }
-
-            return r;
-        }
-        */
 
         void init_clients_from_node_list()
         {
