@@ -10,7 +10,7 @@ from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 
 """
-ArcanainSimulatorを起動するlaunchファイル
+ArcanainSimulatorをシミュレータとして使うlaunchファイル
 transition_recipe_testのサンプルノードも同時に起動する。
 今後実用に向けて拡張予定
 """

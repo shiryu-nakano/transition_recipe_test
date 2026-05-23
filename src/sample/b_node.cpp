@@ -5,7 +5,7 @@
 #include <chrono>
 using namespace std::chrono_literals;
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
   class BNode : public rclcpp_lifecycle::LifecycleNode
@@ -51,18 +51,18 @@ namespace transition_recipe_test
     void timer_callback()
     {
       geometry_msgs::msg::Twist msg;
-      msg.linear.x = 1.5;  // 1.5 m/s で直進
+      msg.linear.x = 1.5;  // 0.5 m/s で直進
       msg.angular.z = 0.0; // 回転速度 0 (まっすぐ)
       cmd_vel_pub_->publish(msg);
     }
   };
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node
 
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<transition_recipe_test::BNode>();
+  auto node = std::make_shared<transition_judge_node::BNode>();
   rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();
   return 0;

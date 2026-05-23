@@ -10,14 +10,14 @@
 #include <chrono>
 
 #include "transition_recipe_test/common_types.hpp"
-#include "transition_recipe_test/graph.hpp"
-#include "transition_recipe_test/graph_generator.hpp"
+#include "transition_recipe_test/graph/graph.hpp"
+#include "transition_recipe_test/graph/graph_generator.hpp"
 // #include "transition_recipe_test/recipe_generator.hpp"
 #include "transition_recipe_test/switching_strategy.hpp"
 
 using namespace std::chrono_literals;
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
     using ChangeState = lifecycle_msgs::srv::ChangeState;
@@ -34,12 +34,14 @@ namespace transition_recipe_test
         {
 
             // 1.1 YAML から node_ids を読み込む
+            // 管理対象のnodeの名前
             node_names_ = this->declare_parameter<std::vector<std::string>>(
                 "node_ids",
                 std::vector<std::string>{} // デフォルトは空
             );
 
             // 1.2 状態を管理するgraphをyamlから読み取る
+            // 管理対象のnode群の状態組み合わせによって決まる全体の状態ごとのstate id
             const std::string graph_yaml_path = this->declare_parameter<std::string>(
                 "graph_yaml_path", 
                 ""
@@ -582,15 +584,15 @@ namespace transition_recipe_test
         }
     };
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node
 
 // ---- main ----
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    // auto node = std::make_shared<transition_recipe_test::RecipeTestNode>();
-    auto node = std::make_shared<transition_recipe_test::MultipleNodeManager>();
+    // auto node = std::make_shared<transition_judge_node::RecipeTestNode>();
+    auto node = std::make_shared<transition_judge_node::MultipleNodeManager>();
     rclcpp::spin(node);
 
     rclcpp::shutdown();

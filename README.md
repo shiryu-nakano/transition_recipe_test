@@ -1,4 +1,4 @@
-# transition_recipe_test
+# transition_judge_node
 
 ## 概要
 複数の ROS 2 LifecycleNode をまとめて状態管理し、システム全体の状態を
@@ -21,13 +21,13 @@
 5. `ChangeState` を順番に呼び出してレシピを実行
 
 ## モジュール構成
-- `include/transition_recipe_test/common_types.hpp`  
+- `include/transition_judge_node/common_types.hpp`  
   `SemanticState` / `TransitionRecipe` / `ActionStep` などの共通型
-- `include/transition_recipe_test/graph.hpp` / `graph_generator.hpp`  
+- `include/transition_judge_node/graph.hpp` / `graph_generator.hpp`  
   状態グラフの辞書と YAML からの初期化
-- `include/transition_recipe_test/recipe_generator.hpp` / `src/recipe_generator.cpp`  
+- `include/transition_judge_node/recipe_generator.hpp` / `src/recipe_generator.cpp`  
   state_id 間の遷移レシピ（手書きで定義）
-- `include/transition_recipe_test/switching_strategy.hpp` / `src/switching_strategy.cpp`  
+- `include/transition_judge_node/switching_strategy.hpp` / `src/switching_strategy.cpp`  
   遷移発火判定（時間・位置など）
 - `src/multiple_node_manager.cpp`  
   状態取得、Graph マッチ、遷移判定、レシピ実行を統合するメインノード
@@ -40,13 +40,13 @@
 
 ### ビルド
 ```bash
-colcon build --packages-select transition_recipe_test
+colcon build --packages-select transition_judge_node
 source install/setup.bash
 ```
 
 ### 起動
 ```bash
-ros2 launch transition_recipe_test test_multiple_target.launch.py
+ros2 launch transition_judge_node test_multiple_target.launch.py
 ```
 
 ### 設定ファイル
@@ -62,7 +62,7 @@ ros2 launch transition_recipe_test test_multiple_target.launch.py
   状態グラフ YAML を上書きするための引数  
   例:
 ```bash
-ros2 launch transition_recipe_test test_multiple_target.launch.py \
+ros2 launch transition_judge_node test_multiple_target.launch.py \
   graph_yaml_path:=/path/to/state_graph.yaml
 ```
 

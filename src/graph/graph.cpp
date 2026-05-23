@@ -1,6 +1,6 @@
-#include "transition_recipe_test/graph.hpp"
+#include "transition_recipe_test/graph/graph.hpp"
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
     Graph::Graph() = default;
@@ -32,4 +32,4 @@ namespace transition_recipe_test
         return state_dictionary_.size();
     }
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node

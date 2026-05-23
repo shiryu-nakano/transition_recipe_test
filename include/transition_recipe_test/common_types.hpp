@@ -6,7 +6,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
 struct TransitionContext
@@ -52,4 +52,4 @@ struct TransitionRecipe
     std::string description;
 };
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node

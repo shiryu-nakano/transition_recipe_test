@@ -1,7 +1,7 @@
-// transition_recipe_test/switching_strategy.cpp
+// transition_judge_node/switching_strategy.cpp
 #include "transition_recipe_test/switching_strategy.hpp"
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
 std::optional<TransitionRecipe> SwitchingStrategy::decide_next_state(
@@ -59,4 +59,4 @@ std::optional<TransitionRecipe> SwitchingStrategy::decide_next_state(
     return std::nullopt;
 }
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node

@@ -1,8 +1,11 @@
 #include "transition_recipe_test/recipe_generator.hpp"
 
-namespace transition_recipe_test
+namespace transition_judge_node
 {
 
+    // from_state → target_state の組み合わせを if 分岐で引き当て、
+    // 該当する ActionStep 列（configure / activate / deactivate など）を
+    // 詰めた TransitionRecipe を返す。マッチしなければ末尾で空レシピを返す。
     TransitionRecipe build_transition_recipe(
         const std::string &from_state,
         const std::string &target_state)
@@ -181,4 +184,4 @@ namespace transition_recipe_test
         return r;
     }
 
-} // namespace transition_recipe_test
+} // namespace transition_judge_node
