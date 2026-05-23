@@ -123,6 +123,10 @@ branch: https://github.com/shiryu-nakano/transition_recipe_test/tree/develop/app
   * [ ] 4つのnode間での状態遷移をテストする
     * [ ] これは実機に乗せるロジックなので，全探索してテストすること
 
+
+**Finally**
+* [ ] このリポジトリをライブラリ化する
+* [ ] 
 ---
 
 # LOG
