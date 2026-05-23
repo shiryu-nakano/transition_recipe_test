@@ -51,8 +51,8 @@ namespace transition_recipe_test
     void timer_callback()
     {
       geometry_msgs::msg::Twist msg;
-      msg.linear.x = 0.5;  // 0.5 m/s で直進
-      msg.angular.z = 1.0; // 回転速度 0 (まっすぐ)
+      msg.linear.x = 1.5;  // 0.5 m/s で直進
+      msg.angular.z = 0.8; // 回転速度 0 (まっすぐ)
       cmd_vel_pub_->publish(msg);
     }
   };
