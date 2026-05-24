@@ -238,37 +238,7 @@ namespace transition_recipe_test
                         "System State = %s, since_last=%.2f sec",
                         current_state_id.c_str(), since_last);
 
-            // ---- 旧: 内部での自動判定パス（判定は外部ノードへ移行のため保留） ----
-            /*
-            if (!recipe_running_)// レシピ実行中はトリガー判定をスキップ
-            {
-                std::string target_state; // outパラ用
-
-                // SwitchingStrategyクラスによって
-                auto maybe_recipe = switcher_.decide_next_state(
-                    current_state_id,
-                    temp_count_, //
-                    since_last, // 前回状態遷移してからの経過時間
-                    x_,
-                    y_,
-                    target_state); // out
-
-                if (maybe_recipe)
-                {
-                    const auto &recipe = *maybe_recipe;
-
-                    RCLCPP_INFO(this->get_logger(),
-                                "[AutoTransition] %s → %s (phase=%d)",
-                                current_state_id.c_str(), target_state.c_str(), temp_count_);
-
-                    execute_transition_recipe(recipe);
-
-                    last_state_id_ = target_state;
-                    last_transition_time_ = now();
-                }
-            }
-            */
-
+                        
             // ⑤ 次の GetState バッチを投げる
             request_get_all_semantic_state();
 

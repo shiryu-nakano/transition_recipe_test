@@ -37,6 +37,20 @@
 * [X] ~~*現在のリポジトリは不要なので、transition_recipe_testに統合する*~~ [2026-05-23 21:20]
   * [X] ~~*現在のリポジトリは消す*~~ [2026-05-23 21:20]
   * [X] ~~*judgement nodeは何？消してOK？？*~~ [2026-05-23 21:20]
+**整理2026-05-24**
+- transition-recipe-test nodeは、状態管理（状態のグラフを用いた表現と、状態遷移の実行）だけを責務とする
+  - 状態の表現は、semanticStateをnodeとし、transitionRecipeをエッジとしたgraphを用いる。
+    - timerCallbackでsemanticStateを取得し、graphと照会し、状態を表すstringをpublishする
+  - 状態遷移は入力に応じて行う
+    - 入力があったときのみ、内部のトリガー(bool:should_transiiton)がtrueになり、遷移を行って、その後フラグがfalseに戻るようにする？
+    - 入力のトピックは、
+      ```
+       ros2 topic pub --once /transition_request transition_recipe_test/msg/TransitionRequest \
+  '{from_state_id: "STATE_A_ONLY", target_state_id: "STATE_ALL_OFF"}'
+
+      publisher: beginning loop
+      publishing #1: transition_recipe_test.msg.TransitionRequest(from_state_id='STATE_A_ONLY', target_state_id='STATE_ALL_OFF')
+      ```
 
 **pure-pursuit/dwaの単一のlaunchをセットアップする**
 - 作るもの
