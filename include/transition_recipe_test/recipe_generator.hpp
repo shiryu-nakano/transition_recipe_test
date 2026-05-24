@@ -3,7 +3,7 @@
 #include <string>
 #include "transition_recipe_test/common_types.hpp"
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
 
     /// state_id ペアから対応する TransitionRecipe を構築する。
@@ -19,4 +19,4 @@ namespace transition_judge_node
         const std::string &from_state,
         const std::string &target_state);
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test

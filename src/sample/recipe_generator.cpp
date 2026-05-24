@@ -1,6 +1,6 @@
 #include "transition_recipe_test/recipe_generator.hpp"
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
 
     // from_state → target_state の組み合わせを if 分岐で引き当て、
@@ -184,4 +184,4 @@ namespace transition_judge_node
         return r;
     }
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test

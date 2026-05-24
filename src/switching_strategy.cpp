@@ -1,8 +1,20 @@
-// transition_judge_node/switching_strategy.cpp
+// transition_recipe_test/switching_strategy.cpp
 #include "transition_recipe_test/switching_strategy.hpp"
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
+
+std::optional<TransitionRecipe> SwitchingStrategy::call_transition_recipe(
+    const std::string &from_state_id,
+    const std::string &target_state_id) const
+{
+    TransitionRecipe r = build_transition_recipe(from_state_id, target_state_id);
+    if (r.steps.empty())
+    {
+        return std::nullopt;
+    }
+    return r;
+}
 
 std::optional<TransitionRecipe> SwitchingStrategy::decide_next_state(
     const std::string &current_state_id,
@@ -59,4 +71,4 @@ std::optional<TransitionRecipe> SwitchingStrategy::decide_next_state(
     return std::nullopt;
 }
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test

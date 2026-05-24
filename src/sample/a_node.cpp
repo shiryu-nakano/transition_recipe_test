@@ -5,7 +5,7 @@
 #include <chrono>
 using namespace std::chrono_literals;
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
 
     class ANode : public rclcpp_lifecycle::LifecycleNode
@@ -40,6 +40,11 @@ namespace transition_judge_node
         {
             RCLCPP_INFO(this->get_logger(), "[A_node] DEACTIVATED");
             timer_->cancel();
+
+            // publisher を無効化する前に停止指示を 1 回送る（subscriber 側は最後の値を保持し続けるため）
+            geometry_msgs::msg::Twist stop_msg;
+            cmd_vel_pub_->publish(stop_msg);
+
             cmd_vel_pub_->on_deactivate();
             return CallbackReturn::SUCCESS;
         }
@@ -58,12 +63,12 @@ namespace transition_judge_node
         }
     };
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<transition_judge_node::ANode>();
+    auto node = std::make_shared<transition_recipe_test::ANode>();
     rclcpp::spin(node->get_node_base_interface());
     rclcpp::shutdown();
     return 0;

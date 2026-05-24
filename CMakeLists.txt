@@ -12,12 +12,21 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+# ========================================
+# メッセージ生成
+# ========================================
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/TransitionRequest.msg"
+)
 
 
 
@@ -87,6 +96,7 @@ add_executable(multiple_node_manager
 ament_target_dependencies(multiple_node_manager
   rclcpp
   lifecycle_msgs
+  std_msgs
   geometry_msgs
   nav_msgs
 )
@@ -100,6 +110,11 @@ target_link_libraries(multiple_node_manager
   graph_lib
   recipe_lib
 )
+
+# 同一パッケージ内で生成した msg を C++ から使う場合の慣例的リンク方法
+rosidl_get_typesupport_target(cpp_typesupport_target
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(multiple_node_manager "${cpp_typesupport_target}")
 
 # ========================================
 # A_node / B_node / C_node（各 LifecycleNode）
@@ -186,4 +201,5 @@ install(DIRECTORY include/
 )
 
 ament_export_targets(export_${PROJECT_NAME})
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()

@@ -1,7 +1,7 @@
 // src/graph/graph_generator.cpp
 #include "transition_recipe_test/graph/graph_generator.hpp"
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
     namespace
     {

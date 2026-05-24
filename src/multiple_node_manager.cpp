@@ -4,6 +4,8 @@
 #include <lifecycle_msgs/srv/get_state.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 #include <map>
 #include <string>
@@ -14,10 +16,11 @@
 #include "transition_recipe_test/graph/graph_generator.hpp"
 // #include "transition_recipe_test/recipe_generator.hpp"
 #include "transition_recipe_test/switching_strategy.hpp"
+#include "transition_recipe_test/msg/transition_request.hpp"
 
 using namespace std::chrono_literals;
 
-namespace transition_judge_node
+namespace transition_recipe_test
 {
 
     using ChangeState = lifecycle_msgs::srv::ChangeState;
@@ -68,7 +71,8 @@ namespace transition_judge_node
             generate_state_graph(graph_yaml_path);
 
 
-
+            // ---- 旧: pose/odom と初期 x,y の取得は判定ロジック外部化に伴い保留 ----
+            /*
             pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
                 "current_pose", 10,
                 std::bind(&MultipleNodeManager::pose_callback, this, std::placeholders::_1));
@@ -84,6 +88,20 @@ namespace transition_judge_node
             this->declare_parameter<double>("initial_y", 0.0);
             x_ = this->get_parameter("initial_x").as_double();
             y_ = this->get_parameter("initial_y").as_double();
+            */
+
+            // ---- 新: 現在状態と経過時間を publish するための pub ----
+            state_id_pub_ = this->create_publisher<std_msgs::msg::String>(
+                "/current_state_id", 10);
+            timespan_pub_ = this->create_publisher<std_msgs::msg::Float64>(
+                "/state_timespan_sec", 10);
+
+            // 判定ノードからの遷移指示を受け取る subscriber
+            transition_request_sub_ =
+                this->create_subscription<transition_recipe_test::msg::TransitionRequest>(
+                    "/transition_request", 10,
+                    std::bind(&MultipleNodeManager::on_transition_request, this,
+                              std::placeholders::_1));
 
             // operation → Transition ID のマップ（辞書？）を作成
             init_transition_map();
@@ -100,8 +118,7 @@ namespace transition_judge_node
         TransitionRecipe recipe_;
         bool started_ = false; // 3秒経過後に true にして開始
         std::size_t current_step_index_ = 0;
-        // std::vector<std::string> node_names_ = {"A_node", "B_node", "C_node"};
-        std::vector<std::string> node_names_;
+        std::vector<std::string> node_names_; //= {"A_node", "B_node", "C_node"};
 
         std::map<std::string, rclcpp::Client<ChangeState>::SharedPtr> change_clients_;
         std::map<std::string, rclcpp::Client<GetState>::SharedPtr> getstate_clients_;
@@ -120,17 +137,23 @@ namespace transition_judge_node
 
         std::map<std::string, uint8_t> transition_map_;
 
-        // サブスクライバ
-        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
-	    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-
-        // 位置情報
-        double x_;
-        double y_;
+        // ---- 旧: pose/odom サブスクライバと位置情報（判定外部化に伴い保留） ----
+        //rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+	    //rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+        //double x_;
+        //double y_;
         int temp_count_ = 0;
 
+        // ---- 新: 現在状態と経過時間の出力 / 判定ノードからの遷移指示の入力 ----
+        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_id_pub_;
+        rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr timespan_pub_;
+        rclcpp::Subscription<transition_recipe_test::msg::TransitionRequest>::SharedPtr
+            transition_request_sub_;
+
         SwitchingStrategy switcher_; // 状態遷移判定ロジック
-        // TODO　このStrategyを実装できればOK！
+        // このswitcherは、判定ではなくて、recipeを(from, to)　の入力に対してrecipeを返すだけになる。今のrecipe_generatorをそのままくっつければOK
+        //判定は他のnodeが行い、判定で状態遷移が必要になったときにのみ、topicが来る。それをサブスクライブしたときにcallbackで上記のswitcherが呼ばれるようにしたい。
+        // TODO　このstrategyは今後外部のパッケージとして実装されるので不要になるが、すぐに消さない
 
         // ==== 初期化系 ====
 
@@ -163,96 +186,138 @@ namespace transition_judge_node
         // ==== タイマーコールバック（main処理） ====
         void timer_callback()
         {
+            //　timerCallbackで行う処理
+            /*
+            このノードの出力：
+                SemanticState current_semantic_state から得られるstr state_id
+                timespan （現在の状態になってからの経過秒数）
+            */
+
+
+
             // double elapsed = (now() - start_time_).seconds();
 
             // ① まだ前回の GetState が返りきっていない場合はスキップ
-            if (pending_semantic_updates_ != 0)
-            {
-                return;
-            }
+            if (pending_semantic_updates_ != 0) return;
+
 
             // ② client経由で取得した最新のsemanticStateをKeyにしてgraphからstate_id を取得
             auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
+            std::string current_state_id;
             if (!state_id_opt)
             {
                 RCLCPP_WARN(this->get_logger(),
                             "NO MATCH for current SemanticState");
+                current_state_id = "UNKNOWN";
             }
             else
             {
-                const std::string &current_state_id = *state_id_opt;
-
-                // 初回（まだ記録無し）
-                if (last_state_id_.empty())
-                {
-                    last_state_id_ = current_state_id;
-                    last_transition_time_ = now();
-                }
-
-                double since_last = (now() - last_transition_time_).seconds();
-
-                RCLCPP_INFO(this->get_logger(),
-                            "System State = %s",
-                            current_state_id.c_str());
-                RCLCPP_INFO(this->get_logger(),
-                            "temp_count_=%d, since_last=%.2f sec, x=%.3f, y=%.3f",
-                            temp_count_, since_last, x_, y_);
-
-                if (!recipe_running_)// レシピ実行中はトリガー判定をスキップ
-                {
-                    std::string target_state; // outパラ用
-
-                    // SwitchingStrategyクラスによって
-                    auto maybe_recipe = switcher_.decide_next_state(
-                        current_state_id,
-                        temp_count_, // 
-                        since_last, // 前回状態遷移してからの経過時間
-                        x_,
-                        y_,
-                        target_state); // out
-
-                    if (maybe_recipe)
-                    {
-                        const auto &recipe = *maybe_recipe;
-
-                        RCLCPP_INFO(this->get_logger(),
-                                    "[AutoTransition] %s → %s (phase=%d)",
-                                    current_state_id.c_str(), target_state.c_str(), temp_count_);
-
-                        execute_transition_recipe(recipe);
-
-                        last_state_id_ = target_state;
-                        last_transition_time_ = now();
-                    }
-                }
+                current_state_id = *state_id_opt;
             }
 
-            // ③ 次の GetState バッチを投げる
+            // ③ state_id が変わったら経過時間をリセット
+            if (last_state_id_.empty() || current_state_id != last_state_id_)
+            {
+                last_state_id_ = current_state_id;
+                last_transition_time_ = now();
+            }
+            double since_last = (now() - last_transition_time_).seconds();
+
+            // ④ state_id と経過時間を publish（判定ノード向けの出力）
+            {
+                std_msgs::msg::String state_msg;
+                state_msg.data = current_state_id;
+                state_id_pub_->publish(state_msg);
+
+                std_msgs::msg::Float64 timespan_msg;
+                timespan_msg.data = since_last;
+                timespan_pub_->publish(timespan_msg);
+            }
+
+            RCLCPP_INFO(this->get_logger(),
+                        "System State = %s, since_last=%.2f sec",
+                        current_state_id.c_str(), since_last);
+
+            // ---- 旧: 内部での自動判定パス（判定は外部ノードへ移行のため保留） ----
+            /*
+            if (!recipe_running_)// レシピ実行中はトリガー判定をスキップ
+            {
+                std::string target_state; // outパラ用
+
+                // SwitchingStrategyクラスによって
+                auto maybe_recipe = switcher_.decide_next_state(
+                    current_state_id,
+                    temp_count_, //
+                    since_last, // 前回状態遷移してからの経過時間
+                    x_,
+                    y_,
+                    target_state); // out
+
+                if (maybe_recipe)
+                {
+                    const auto &recipe = *maybe_recipe;
+
+                    RCLCPP_INFO(this->get_logger(),
+                                "[AutoTransition] %s → %s (phase=%d)",
+                                current_state_id.c_str(), target_state.c_str(), temp_count_);
+
+                    execute_transition_recipe(recipe);
+
+                    last_state_id_ = target_state;
+                    last_transition_time_ = now();
+                }
+            }
+            */
+
+            // ⑤ 次の GetState バッチを投げる
             request_get_all_semantic_state();
 
             // RCLCPP_INFO(this->get_logger(),
             //             "Hello, elapsed %.2f sec", elapsed);
         }
 
-        // PoseCallBack
-        void pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
-        {
+        // PoseCallBack（判定外部化に伴い保留）
+        // void pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+        // {
+        //     x_ = msg->pose.position.x;
+        //     y_ = msg->pose.position.y;
+        //     // RCLCPP_INFO(this->get_logger(),
+        //     //             "Received pose: x=%.3f, y=%.3f",
+        //     //             msg->pose.position.x, msg->pose.position.y);
+        // }
 
-            x_ = msg->pose.position.x;
-            y_ = msg->pose.position.y;
-            /*RCLCPP_INFO(
-                this->get_logger(),
-                "Received pose: x=%.3f, y=%.3f",
-                msg->pose.position.x,
-                msg->pose.position.y);
-            */
-        }
+        // OdomCallBack（判定外部化に伴い保留）
+        // void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+        // {
+        //     x_ = msg->pose.pose.position.x;
+        //     y_ = msg->pose.pose.position.y;
+        // }
 
-        // OdomCallBack
-        void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+        // ==== 判定ノードからの遷移指示の受信 ====
+        void on_transition_request(
+            const transition_recipe_test::msg::TransitionRequest::SharedPtr msg)
         {
-            x_ = msg->pose.pose.position.x;
-            y_ = msg->pose.pose.position.y;
+            const auto &from = msg->from_state_id;
+            const auto &to = msg->target_state_id;
+
+            RCLCPP_INFO(this->get_logger(),
+                        "[TransitionRequest] %s -> %s",
+                        from.c_str(), to.c_str());
+
+            auto maybe_recipe = switcher_.call_transition_recipe(from, to);
+            if (!maybe_recipe)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "No recipe defined for %s -> %s",
+                            from.c_str(), to.c_str());
+                return;
+            }
+
+            execute_transition_recipe(*maybe_recipe);
+
+            // 経過時間カウンタの基準を遷移先で更新
+            last_state_id_ = to;
+            last_transition_time_ = now();
         }
 
         // ==== Recipe 実行 ====
@@ -393,24 +458,6 @@ namespace transition_judge_node
                     ++current_step_index_;
                     execute_next_step();
                 });
-        }
-
-        // TODO 後で変更
-        std::string determine_next_state(const std::string &current)
-        {
-            if (current == "ALL_UNCONFIGURED")
-                return "STATE_ALL_OFF";
-            if (current == "STATE_ALL_OFF")
-                return "STATE_A_ONLY";
-            if (current == "STATE_A_ONLY")
-                return "STATE_B_ONLY";
-            if (current == "STATE_B_ONLY")
-                return "STATE_C_ONLY";
-            if (current == "STATE_C_ONLY")
-                return "STATE_ALL_OFF";
-
-            // fallback
-            return "STATE_ALL_OFF";
         }
 
         // ==== GetState  ====
@@ -584,15 +631,15 @@ namespace transition_judge_node
         }
     };
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test
 
 // ---- main ----
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    // auto node = std::make_shared<transition_judge_node::RecipeTestNode>();
-    auto node = std::make_shared<transition_judge_node::MultipleNodeManager>();
+    // auto node = std::make_shared<transition_recipe_test::RecipeTestNode>();
+    auto node = std::make_shared<transition_recipe_test::MultipleNodeManager>();
     rclcpp::spin(node);
 
     rclcpp::shutdown();

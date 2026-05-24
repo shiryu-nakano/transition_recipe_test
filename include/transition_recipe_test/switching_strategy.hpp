@@ -1,4 +1,4 @@
-// transition_judge_node/switching_strategy.hpp
+// transition_recipe_test/switching_strategy.hpp
 #pragma once
 
 #include "transition_recipe_test/recipe_generator.hpp"
@@ -8,11 +8,18 @@
 #include <cmath>    // std::hypot
 #include <string>
 
-namespace transition_judge_node {
+namespace transition_recipe_test {
 
 class SwitchingStrategy
 {
 public:
+    /// (from, to) から対応する TransitionRecipe を引き当てる lookup。
+    /// 判定は外部ノードが行う前提で、本クラスは recipe 取得のみを担う。
+    /// 未定義の組み合わせなら std::nullopt。
+    std::optional<TransitionRecipe> call_transition_recipe(
+        const std::string &from_state_id,
+        const std::string &target_state_id) const;
+
     /// 状態遷移の判定だけを行う純粋ロジック
     ///
     /// @param current_state_id  Graph から得られた現在のシステム状態ID
@@ -33,4 +40,4 @@ public:
         std::string &out_target_state) const;
 };
 
-} // namespace transition_judge_node
+} // namespace transition_recipe_test
