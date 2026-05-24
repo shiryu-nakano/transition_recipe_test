@@ -71,18 +71,6 @@ namespace transition_recipe_test
             generate_state_graph(graph_yaml_path);
 
 
-            // ---- 旧: pose/odom と初期 x,y の取得は判定ロジック外部化に伴い保留 ----
-            /*
-            pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-                "current_pose", 10,
-                std::bind(&MultipleNodeManager::pose_callback, this, std::placeholders::_1));
-
-	        odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-                "/odom", 10,
-                std::bind(&MultipleNodeManager::odom_callback, this, std::placeholders::_1));
-                // 注）odomからはPoseも取り出すことができる
-
-
             // x,y の初期値（現状ハードコーディングしている）
             this->declare_parameter<double>("initial_x", 0.0);
             this->declare_parameter<double>("initial_y", 0.0);
@@ -238,7 +226,7 @@ namespace transition_recipe_test
                         "System State = %s, since_last=%.2f sec",
                         current_state_id.c_str(), since_last);
 
-                        
+
             // ⑤ 次の GetState バッチを投げる
             request_get_all_semantic_state();
 
