@@ -1,0 +1,21 @@
+
+states:
+  - id: ALL_UNCONFIGURED
+    nodes:
+      dwa_planner: UNCONFIGURED
+      pure_pursuit_planner: UNCONFIGURED
+      
+  - id: STATE_ALL_OFF
+    nodes:
+      dwa_planner: INACTIVE
+      pure_pursuit_planner: INACTIVE
+
+  - id: dwa_planner
+    nodes:
+      dwa_planner: ACTIVE
+      pure_pursuit_planner: INACTIVE
+
+  - id: pure_pursuit_planner
+    nodes:
+      dwa_planner: INACTIVE
+      pure_pursuit_planner : ACTIVE

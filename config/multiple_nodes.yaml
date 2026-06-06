@@ -1,0 +1,5 @@
+multiple_node_manager:
+  ros__parameters:
+    node_ids:
+      - "dwa_planner"
+      - "pure_pursuit_planner"
