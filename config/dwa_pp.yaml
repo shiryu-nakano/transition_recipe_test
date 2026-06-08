@@ -5,7 +5,7 @@ states:
       dwa_planner: UNCONFIGURED
       pure_pursuit_planner: UNCONFIGURED
       
-  - id: STATE_ALL_OFF
+  - id: ALL_CONFIGURED
     nodes:
       dwa_planner: INACTIVE
       pure_pursuit_planner: INACTIVE

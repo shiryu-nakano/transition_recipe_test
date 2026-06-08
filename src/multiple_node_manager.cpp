@@ -71,6 +71,7 @@ namespace transition_recipe_test
             generate_state_graph(graph_yaml_path);
 
 
+            /*
             // x,y の初期値（現状ハードコーディングしている）
             this->declare_parameter<double>("initial_x", 0.0);
             this->declare_parameter<double>("initial_y", 0.0);
