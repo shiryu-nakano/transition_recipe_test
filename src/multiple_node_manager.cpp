@@ -6,6 +6,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include <map>
 #include <string>
@@ -84,6 +85,8 @@ namespace transition_recipe_test
                 "/current_state_id", 10);
             timespan_pub_ = this->create_publisher<std_msgs::msg::Float64>(
                 "/state_timespan_sec", 10);
+            state_text_marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>(
+                "/state_text_marker", 10);
 
             // 判定ノードからの遷移指示を受け取る subscriber
             transition_request_sub_ =
@@ -136,6 +139,7 @@ namespace transition_recipe_test
         // ---- 新: 現在状態と経過時間の出力 / 判定ノードからの遷移指示の入力 ----
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_id_pub_;
         rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr timespan_pub_;
+        rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr state_text_marker_pub_;
         rclcpp::Subscription<transition_recipe_test::msg::TransitionRequest>::SharedPtr
             transition_request_sub_;
 
@@ -189,6 +193,9 @@ namespace transition_recipe_test
             // ① まだ前回の GetState が返りきっていない場合はスキップ
             if (pending_semantic_updates_ != 0) return;
 
+            // レシピ実行中は過渡状態をpublishしない（judgeの誤発火を防ぐ）
+            if (recipe_running_) return;
+
 
             // ② client経由で取得した最新のsemanticStateをKeyにしてgraphからstate_id を取得
             auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
@@ -221,6 +228,32 @@ namespace transition_recipe_test
                 std_msgs::msg::Float64 timespan_msg;
                 timespan_msg.data = since_last;
                 timespan_pub_->publish(timespan_msg);
+
+                // 現在状態をRVizにテキストマーカーで表示
+                visualization_msgs::msg::Marker text_marker;
+                text_marker.header.frame_id = "odom";
+                text_marker.header.stamp = now();
+                text_marker.ns = "system_state";
+                text_marker.id = 0;
+                text_marker.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+                text_marker.action = visualization_msgs::msg::Marker::ADD;
+                text_marker.pose.position.x = 0.0;
+                text_marker.pose.position.y = 0.0;
+                text_marker.pose.position.z = 1.5;
+                text_marker.pose.orientation.w = 1.0;
+                text_marker.scale.z = 0.5;
+                text_marker.text = current_state_id;
+                if (current_state_id == "pure_pursuit_planner") {
+                    text_marker.color = []{
+                        std_msgs::msg::ColorRGBA c; c.r=0.0; c.g=1.0; c.b=0.0; c.a=1.0; return c;}();
+                } else if (current_state_id == "dwa_planner") {
+                    text_marker.color = []{
+                        std_msgs::msg::ColorRGBA c; c.r=1.0; c.g=0.3; c.b=0.0; c.a=1.0; return c;}();
+                } else {
+                    text_marker.color = []{
+                        std_msgs::msg::ColorRGBA c; c.r=1.0; c.g=1.0; c.b=1.0; c.a=1.0; return c;}();
+                }
+                state_text_marker_pub_->publish(text_marker);
             }
 
             RCLCPP_INFO(this->get_logger(),

@@ -155,6 +155,9 @@ branch: https://github.com/shiryu-nakano/transition_judge_node/tree/develop/appl
     * [ ] これは実機に乗せるロジックなので，全探索してテストすること
 
 ---
+### 20260801
+* [ ] dwa->ppヘの切り替え条件
+  * [ ] 障害物がない&way point に到着したとき
 
 # LOG
 
