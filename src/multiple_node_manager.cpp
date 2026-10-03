@@ -117,6 +117,10 @@ namespace transition_recipe_test
 
         SemanticState current_semantic_state_;     // 現在のセマンティック状態
         std::size_t pending_semantic_updates_ = 0; // 非同期GetStateの応答待ち数
+        // レシピ実行のたびに進める世代番号。レシピをまたいだ GetState 応答は
+        // 遷移前後の状態が混ざる（例: pp=INACTIVE(後), dwa=INACTIVE(前) → 偽の ALL_CONFIGURED）ので捨てる
+        std::uint64_t state_epoch_ = 0;
+        std::uint64_t batch_epoch_ = 0; // 直近の GetState バッチを投げた時点の世代番号
 
         Graph state_graph_; // 状態遷移グラフ
 
@@ -198,6 +202,12 @@ namespace transition_recipe_test
             // レシピ実行中は過渡状態をpublishしない（judgeの誤発火を防ぐ）
             if (recipe_running_) return;
 
+            // レシピ実行前に投げた GetState の応答は遷移前後が混ざりうるので捨てて取り直す
+            if (batch_epoch_ != state_epoch_)
+            {
+                request_get_all_semantic_state();
+                return;
+            }
 
             // ② client経由で取得した最新のsemanticStateをKeyにしてgraphからstate_id を取得
             auto state_id_opt = state_graph_.getCurrentSemanticState(current_semantic_state_);
@@ -298,6 +308,15 @@ namespace transition_recipe_test
                         "[TransitionRequest] %s -> %s",
                         from.c_str(), to.c_str());
 
+            // 現在状態と食い違う from の要求は、古い状態に基づく判定なので実行しない
+            if (from != last_state_id_)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Ignore TransitionRequest %s -> %s: current state is %s",
+                            from.c_str(), to.c_str(), last_state_id_.c_str());
+                return;
+            }
+
             auto maybe_recipe = switcher_.call_transition_recipe(from, to);
             if (!maybe_recipe)
             {
@@ -337,6 +356,8 @@ namespace transition_recipe_test
 
             // レシピ開始！
             recipe_running_ = true;
+            ++state_epoch_; // これ以前に投げた GetState の応答は無効
+
             recipe_ = recipe; // 内部変数に代入する
             current_step_index_ = 0;
 
@@ -461,6 +482,7 @@ namespace transition_recipe_test
         {
             current_semantic_state_.node_states.clear();    // SemanticStateをクリア
             pending_semantic_updates_ = node_names_.size(); // 応答待ちカウンタをセット
+            batch_epoch_ = state_epoch_;
 
             for (const auto &name : node_names_)
             {
