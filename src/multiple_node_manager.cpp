@@ -143,9 +143,11 @@ namespace transition_recipe_test
         rclcpp::Subscription<transition_recipe_test::msg::TransitionRequest>::SharedPtr
             transition_request_sub_;
 
-        SwitchingStrategy switcher_; // 状態遷移判定ロジック
+        SwitchingStrategy switcher_; // 状態遷移判定ロジック→→ではなくて、状態遷移実行ロジック
         // このswitcherは、判定ではなくて、recipeを(from, to)　の入力に対してrecipeを返すだけになる。今のrecipe_generatorをそのままくっつければOK
         //判定は他のnodeが行い、判定で状態遷移が必要になったときにのみ、topicが来る。それをサブスクライブしたときにcallbackで上記のswitcherが呼ばれるようにしたい。
+        
+
         // TODO　このstrategyは今後外部のパッケージとして実装されるので不要になるが、すぐに消さない
 
         // ==== 初期化系 ====
@@ -231,7 +233,7 @@ namespace transition_recipe_test
 
                 // 現在状態をRVizにテキストマーカーで表示
                 visualization_msgs::msg::Marker text_marker;
-                text_marker.header.frame_id = "odom";
+                text_marker.header.frame_id = "base_link"; // ロボットの頭上に追従させる
                 text_marker.header.stamp = now();
                 text_marker.ns = "system_state";
                 text_marker.id = 0;
@@ -305,6 +307,7 @@ namespace transition_recipe_test
                 return;
             }
 
+            // 遷移レシピを実行
             execute_transition_recipe(*maybe_recipe);
 
             // 経過時間カウンタの基準を遷移先で更新
