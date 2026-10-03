@@ -59,6 +59,16 @@ def generate_launch_description():
         description='Path to the CSV file for waypoint_publisher (tgt_path / waypoint)',
     )
 
+    # 判定ノードの閾値。src 側の yaml を直接読むので、書き換えて launch し直すだけで反映される（ビルド不要）
+    default_judge_params = os.path.expanduser(
+        '~/ros2_ws/src/transition_judge_interface/config/params.yaml'
+    )
+    judge_params_arg = DeclareLaunchArgument(
+        'judge_params',
+        default_value=default_judge_params,
+        description='Path to transition_judge_interface params YAML (thresholds)',
+    )
+
     use_judge_arg = DeclareLaunchArgument(
         'use_judge',
         default_value='true',
@@ -96,6 +106,7 @@ def generate_launch_description():
     return LaunchDescription([
         graph_yaml_arg,
         path_csv_arg,
+        judge_params_arg,
         use_judge_arg,
         use_rviz_arg,
 
@@ -196,6 +207,7 @@ def generate_launch_description():
             executable='transition_judge_interface',
             name='transition_judge_interface',
             output='screen',
+            parameters=[LaunchConfiguration('judge_params')],
             # 実機では DWA と同じフィルタ後の scan で障害物判定する
             remappings=[('/scan', '/filtered_scan')],
             condition=IfCondition(LaunchConfiguration('use_judge')),
