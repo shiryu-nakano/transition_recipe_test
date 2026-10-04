@@ -1,0 +1,12 @@
+states:
+  - id: ALL_UNCONFIGURED
+    nodes:
+      pure_pursuit_planner: UNCONFIGURED
+
+  - id: ALL_CONFIGURED
+    nodes:
+      pure_pursuit_planner: INACTIVE
+
+  - id: pure_pursuit_planner
+    nodes:
+      pure_pursuit_planner: ACTIVE

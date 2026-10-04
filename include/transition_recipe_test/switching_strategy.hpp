@@ -13,6 +13,11 @@ namespace transition_recipe_test {
 class SwitchingStrategy
 {
 public:
+    /// 使う recipe の組を選ぶ。"dwa_pp"（既定）または "pp_only"。
+    /// TODO: 管理対象ノードと状態グラフから recipe を自動生成する（今はハードコード）
+    void set_recipe_set(const std::string &recipe_set) { recipe_set_ = recipe_set; }
+    const std::string &recipe_set() const { return recipe_set_; }
+
     /// (from, to) から対応する TransitionRecipe を引き当てる lookup。
     /// 判定は外部ノードが行う前提で、本クラスは recipe 取得のみを担う。
     /// 未定義の組み合わせなら std::nullopt。
@@ -38,6 +43,9 @@ public:
         double x,
         double y,
         std::string &out_target_state) const;
+
+private:
+    std::string recipe_set_ = "dwa_pp";
 };
 
 } // namespace transition_recipe_test

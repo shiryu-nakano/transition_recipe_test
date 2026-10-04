@@ -1,0 +1,4 @@
+multiple_node_manager:
+  ros__parameters:
+    node_ids:
+      - "pure_pursuit_planner"

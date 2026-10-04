@@ -19,4 +19,10 @@ namespace transition_recipe_test
         const std::string &from_state,
         const std::string &target_state);
 
+    /// pure_pursuit_planner のみを管理対象とする構成（config/pp_only.yaml）用。
+    /// 状態名は build_transition_recipe と同じだが、DWA の手順を含まない。
+    TransitionRecipe build_transition_recipe_pp_only(
+        const std::string &from_state,
+        const std::string &target_state);
+
 } // namespace transition_recipe_test

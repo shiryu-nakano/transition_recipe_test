@@ -51,6 +51,21 @@ namespace transition_recipe_test
                 ""
             );
 
+            // 1.3 使う recipe の組（"dwa_pp" または "pp_only"）
+            // TODO: 管理対象ノードと状態グラフから recipe を自動生成する（今はハードコード）
+            const std::string recipe_set = this->declare_parameter<std::string>("recipe_set", "dwa_pp");
+            if (recipe_set != "dwa_pp" && recipe_set != "pp_only")
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "Unknown recipe_set '%s'. Falling back to 'dwa_pp'.", recipe_set.c_str());
+                switcher_.set_recipe_set("dwa_pp");
+            }
+            else
+            {
+                switcher_.set_recipe_set(recipe_set);
+            }
+            RCLCPP_INFO(this->get_logger(), "Using recipe_set: %s", switcher_.recipe_set().c_str());
+
             if (node_names_.empty())
             {
                 RCLCPP_WARN(this->get_logger(),

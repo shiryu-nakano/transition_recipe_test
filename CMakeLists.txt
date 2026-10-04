@@ -57,6 +57,7 @@ target_link_libraries(graph_lib
 add_library(recipe_lib
   src/switching_strategy.cpp
   src/recipe_generator.cpp
+  src/recipe_generator_pp_only.cpp
   # 旧 A/B/C 用の demo 実装は src/sample/recipe_generator.cpp に残置（link しない）
 )
 

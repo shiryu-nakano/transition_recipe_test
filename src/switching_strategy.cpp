@@ -8,7 +8,9 @@ std::optional<TransitionRecipe> SwitchingStrategy::call_transition_recipe(
     const std::string &from_state_id,
     const std::string &target_state_id) const
 {
-    TransitionRecipe r = build_transition_recipe(from_state_id, target_state_id);
+    TransitionRecipe r = (recipe_set_ == "pp_only")
+        ? build_transition_recipe_pp_only(from_state_id, target_state_id)
+        : build_transition_recipe(from_state_id, target_state_id);
     if (r.steps.empty())
     {
         return std::nullopt;
